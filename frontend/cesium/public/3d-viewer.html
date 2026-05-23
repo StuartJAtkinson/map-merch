@@ -5,17 +5,17 @@
   <title>Heart on a Sleeve — 3D Map</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #060608; overflow: hidden; font-family: system-ui, sans-serif; }
+    body { background: #0d0e0f; overflow: hidden; font-family: system-ui, sans-serif; }
     canvas { display: block; }
 
     #overlay {
       position: absolute; top: 20px; left: 20px;
-      background: rgba(8,8,12,0.92); border: 1px solid #1e1e2a;
+      background: rgba(8,8,12,0.93); border: 1px solid #1e1e2a;
       border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(10px);
-      color: #888; font-size: 12px; min-width: 175px; z-index: 10;
+      color: #888; font-size: 12px; min-width: 180px; z-index: 10;
     }
     #overlay h2 { font-size: 13px; color: #ddd; font-weight: 600; margin-bottom: 8px; }
-    #stats { font-size: 10px; color: #444; line-height: 1.9; margin-bottom: 4px; }
+    #stats  { font-size: 10px; color: #444; line-height: 1.9; margin-bottom: 4px; }
     #status { font-size: 11px; color: #666; min-height: 16px; margin-bottom: 6px; }
     .btn {
       display: block; width: 100%; margin-top: 6px; padding: 7px;
@@ -24,13 +24,15 @@
       transition: all 0.12s; text-decoration: none;
     }
     .btn:hover { border-color: #4a9eff; color: #4a9eff; }
-    .btn.on  { border-color: #4a9eff; color: #4a9eff; background: rgba(74,158,255,0.06); }
-    #hint { font-size: 10px; color: #2a2a36; margin-top: 8px; line-height: 1.9;
+    .btn.on    { border-color: #4a9eff; color: #4a9eff; background: rgba(74,158,255,0.06); }
+    .divider   { border-top: 1px solid #12121a; margin: 8px 0 4px; }
+    .dl-label  { font-size: 10px; color: #2a2a36; margin-bottom: 2px; }
+    #hint { font-size: 10px; color: #1e1e2a; margin-top: 8px; line-height: 1.9;
             border-top: 1px solid #12121a; padding-top: 7px; }
 
     #loading {
       position: fixed; inset: 0; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; background: #060608;
+      align-items: center; justify-content: center; background: #0d0e0f;
       color: #444; font-size: 13px; gap: 12px; z-index: 20;
     }
     #load-bar-wrap { width: 200px; height: 2px; background: #1a1a24; border-radius: 1px; }
@@ -47,241 +49,210 @@
   <h2>3D Map Preview</h2>
   <div id="status">Loading…</div>
   <div id="stats"></div>
+
   <button class="btn" id="btn-mode" style="display:none">🖨 Print Preview</button>
   <button class="btn" id="btn-wire">⬡ Wireframe</button>
   <button class="btn" id="btn-rotate">▶ Auto-rotate</button>
-  <div id="stl-links" style="display:none; margin-top:6px; border-top:1px solid #1e1e2a; padding-top:8px;">
-    <div style="font-size:10px;color:#333;margin-bottom:4px;">Print files (3 colours):</div>
-    <a class="btn" id="dl-buildings" style="margin-top:3px" download="buildings.stl">↓ Buildings (grey)</a>
-    <a class="btn" id="dl-land"      style="margin-top:3px" download="land.stl">↓ Land (green)</a>
-    <a class="btn" id="dl-water"     style="margin-top:3px" download="water.stl">↓ Water (blue)</a>
+
+  <div id="stl-links" style="display:none">
+    <div class="divider"></div>
+    <div class="dl-label">Download print files (3 colours):</div>
+    <a class="btn" id="dl-buildings" download="buildings.stl">↓ Buildings (grey)</a>
+    <a class="btn" id="dl-land"      download="land.stl">↓ Land (green)</a>
+    <a class="btn" id="dl-water"     download="water.stl">↓ Water (blue)</a>
   </div>
+
   <button class="btn" onclick="window.close()">✕ Close</button>
-  <div id="hint">Left drag — orbit<br>Scroll — zoom<br>Right drag — pan</div>
+  <div id="hint">
+    Left drag — orbit<br>
+    Right drag — zoom<br>
+    Middle drag — pan<br>
+    Scroll — zoom
+  </div>
 </div>
 
 <script type="importmap">
 { "imports": {
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    "three":          "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/":  "https://unpkg.com/three@0.160.0/examples/jsm/"
 } }
 </script>
 <script type="module">
-import * as THREE   from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as THREE          from 'three';
+import { OrbitControls }   from 'three/addons/controls/OrbitControls.js';
+import { STLLoader }       from 'three/addons/loaders/STLLoader.js';
 
 // ── URL params ────────────────────────────────────────────────────────────────
-const p     = new URLSearchParams(location.search);
+const p    = new URLSearchParams(location.search);
 const west  = parseFloat(p.get('west')  ?? '-0.13');
 const south = parseFloat(p.get('south') ?? '51.50');
 const east  = parseFloat(p.get('east')  ?? '-0.11');
 const north = parseFloat(p.get('north') ?? '51.52');
-const styleName     = p.get('style') ?? 'osm_default';
-const stlBuildings  = p.get('stl_buildings');
-const stlLand       = p.get('stl_land');
-const stlWater      = p.get('stl_water');
+const stlBuildings = p.get('stl_buildings');
+const stlLand      = p.get('stl_land');
+const stlWater     = p.get('stl_water');
 const hasPrintParts = !!(stlBuildings && stlLand && stlWater);
 
-// stl_buildings/land/water links wired up below after hasPrintParts check
-
-// ── Projection (lon/lat → metres, XZ plane) ───────────────────────────────────
+// ── Projection ────────────────────────────────────────────────────────────────
 const cx     = (east + west)  / 2;
 const cy     = (north + south) / 2;
 const cosLat = Math.cos(cy * Math.PI / 180);
-const M      = 111_320; // metres per degree lat
+const M      = 111_320;
+const sceneW = (east - west)  * cosLat * M;
+const sceneD = (north - south) * M;
 
 function proj(lon, lat) {
   return [(lon - cx) * cosLat * M, (lat - cy) * M];
 }
 
-const sceneW = (east - west)  * cosLat * M;
-const sceneD = (north - south) * M;
-
-// ── Three.js scene ────────────────────────────────────────────────────────────
+// ── Renderer ──────────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(devicePixelRatio);
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.9;
+renderer.toneMappingExposure = 1.0;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x060608);
-scene.fog = new THREE.Fog(0x060608, sceneW * 2, sceneW * 5);
+const BG = 0x0d0e0f;
+scene.background = new THREE.Color(BG);
+scene.fog = new THREE.Fog(BG, sceneW * 2, sceneW * 5);
 
-// Lights
-const ambient = new THREE.AmbientLight(0xffffff, 0.75);
-scene.add(ambient);
-
+// ── Lights ────────────────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff, 0.8));
 const sun = new THREE.DirectionalLight(0xfff5e0, 1.8);
 sun.position.set(sceneW * 0.4, sceneW * 0.8, sceneD * 0.3);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.near = 1;
-sun.shadow.camera.far  = sceneW * 4;
-sun.shadow.camera.left   = -sceneW; sun.shadow.camera.right  = sceneW;
-sun.shadow.camera.top    =  sceneD; sun.shadow.camera.bottom = -sceneD;
+Object.assign(sun.shadow.camera, { near:1, far:sceneW*4, left:-sceneW, right:sceneW, top:sceneD, bottom:-sceneD });
 sun.shadow.bias = -0.0005;
 scene.add(sun);
+scene.add(new THREE.HemisphereLight(0x334466, 0x111118, 0.5));
 
-const sky = new THREE.HemisphereLight(0x334466, 0x111118, 0.55);
-scene.add(sky);
-
-// Camera
+// ── Camera & controls ─────────────────────────────────────────────────────────
 const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 1, sceneW * 20);
-const fitH  = Math.max(sceneW, sceneD) * 0.9;
+const fitH   = Math.max(sceneW, sceneD) * 0.9;
 camera.position.set(0, fitH * 0.7, fitH);
 camera.lookAt(0, 0, 0);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.07;
-controls.autoRotate = false;
-controls.maxPolarAngle = Math.PI / 2 - 0.05;
-controls.minDistance = 20;
-controls.maxDistance = sceneW * 8;
-controls.target.set(0, 0, 0);
-
-// ── Style palettes — solid colours match the 2D scheme ────────────────────────
-// Keys: ground, park, water, roadOther, roadMain, bldg (base; lo/mid/hi derived)
-const PALETTES = {
-  osm_default: {
-    ground:    0xe8e4d8,   // background
-    park:      0xb8d898,
-    water:     0xa8c8e8,
-    roadOther: 0xf0ebe0,
-    roadMain:  0xffffff,
-    bldg:      0xcec8c0,
-    bg:        0xddd8cc,   // sky/fog colour
-  },
-  minimalist: {
-    ground:    0xf0f0ed,
-    park:      0xccdabc,
-    water:     0xc0d8ec,
-    roadOther: 0xbbbbbb,
-    roadMain:  0x888888,
-    bldg:      0xd8d8d8,
-    bg:        0xe8e8e5,
-  },
-  vibrant: {
-    ground:    0xf0ddb0,
-    park:      0x80c870,
-    water:     0x50a8e0,
-    roadOther: 0xf8edd8,
-    roadMain:  0xffffff,
-    bldg:      0xc8a888,
-    bg:        0xe8cfa0,
-  },
+controls.enableDamping  = true;
+controls.dampingFactor  = 0.07;
+controls.autoRotate     = false;
+controls.maxPolarAngle  = Math.PI / 2 - 0.05;
+controls.minDistance    = 20;
+controls.maxDistance    = sceneW * 8;
+// ── Match Cesium: left=orbit, right=zoom, middle=pan ─────────────────────────
+controls.mouseButtons = {
+  LEFT:   THREE.MOUSE.ROTATE,
+  MIDDLE: THREE.MOUSE.PAN,
+  RIGHT:  THREE.MOUSE.DOLLY,
 };
 
-const pal = PALETTES[styleName] ?? PALETTES.osm_default;
-
-// Derive three building shades from the base colour
-function shade(hex, factor) {
-  const c = new THREE.Color(hex);
-  return new THREE.Color(c.r * factor, c.g * factor, c.b * factor).getHex();
-}
-const bldgLo  = shade(pal.bldg, 0.80);
-const bldgMid = shade(pal.bldg, 1.00);
-const bldgHi  = shade(pal.bldg, 1.25);
-
-// Wireframe colours are fixed regardless of scheme
+// ── Fixed print-material solid colours (not scheme-dependent) ─────────────────
+// Three pillars of the physical print: grey buildings, blue water, green land.
+// Wireframe is per-type neon regardless.
+const SOLID = {
+  ground:    0x1a1e1a,
+  park:      0x3a7a3a,   // green land
+  water:     0x1a4070,   // blue water
+  roadOther: 0x383838,   // grey road
+  roadMain:  0x484848,   // lighter grey main road
+  bldgLo:    0x555550,   // grey building lo
+  bldgMid:   0x666660,   // grey building mid
+  bldgHi:    0x8a8a84,   // grey building hi
+};
 const WIRE = {
-  ground:   0x0a1a0a,
-  park:     0x00ff66,
-  water:    0x00aaff,
-  roadOther:0xff7700,
-  roadMain: 0xffcc00,
-  bldgLo:   0x00ffff,
-  bldgMid:  0xaa44ff,
-  bldgHi:   0xffffff,
+  ground:    0x0a1a0a,
+  park:      0x00ff66,
+  water:     0x00aaff,
+  roadOther: 0xff7700,
+  roadMain:  0xffcc00,
+  bldgLo:    0x00ffff,
+  bldgMid:   0xaa44ff,
+  bldgHi:    0xffffff,
 };
 
-// Set background / fog to match scheme
-scene.background.set(pal.bg);
-if (scene.fog) scene.fog.color.set(pal.bg);
-
-function mat(type, solidHex, wireHex, extra = {}) {
+function makeMat(type, solidKey, wireKey, extra = {}) {
   const Ctor = type === 'std' ? THREE.MeshStandardMaterial : THREE.MeshLambertMaterial;
-  const m = new Ctor({ color: solidHex, ...extra });
-  m._solidColor = solidHex;
-  m._wireColor  = wireHex;
+  const m = new Ctor({ color: SOLID[solidKey], ...extra });
+  m._solidColor = SOLID[solidKey];
+  m._wireColor  = WIRE[wireKey];
   return m;
 }
 
-const matGround  = mat('lmb', pal.ground,    WIRE.ground);
-const matRoad    = mat('lmb', pal.roadOther, WIRE.roadOther);
-const matRoadMn  = mat('lmb', pal.roadMain,  WIRE.roadMain);
-const matWater   = mat('lmb', pal.water,     WIRE.water);
-const matPark    = mat('lmb', pal.park,      WIRE.park);
-const matBldgLo  = mat('std', bldgLo,  WIRE.bldgLo,  { roughness:0.8, metalness:0.05 });
-const matBldgMid = mat('std', bldgMid, WIRE.bldgMid, { roughness:0.7, metalness:0.08 });
-const matBldgHi  = mat('std', bldgHi,  WIRE.bldgHi,  { roughness:0.6, metalness:0.12 });
+const matGround  = makeMat('lmb', 'ground',    'ground');
+const matRoad    = makeMat('lmb', 'roadOther', 'roadOther');
+const matRoadMn  = makeMat('lmb', 'roadMain',  'roadMain');
+const matWater   = makeMat('lmb', 'water',     'water');
+const matPark    = makeMat('lmb', 'park',      'park');
+const matBldgLo  = makeMat('std', 'bldgLo',  'bldgLo',  { roughness:0.8, metalness:0.05 });
+const matBldgMid = makeMat('std', 'bldgMid', 'bldgMid', { roughness:0.7, metalness:0.08 });
+const matBldgHi  = makeMat('std', 'bldgHi',  'bldgHi',  { roughness:0.6, metalness:0.12 });
 
-const allMats = [matGround, matRoad, matRoadMn, matWater, matPark, matBldgLo, matBldgMid, matBldgHi];
+const osmMats = [matGround, matRoad, matRoadMn, matWater, matPark, matBldgLo, matBldgMid, matBldgHi];
+const allMats = [...osmMats]; // print part mats added later
 
-// Ground plane
-const groundGeo = new THREE.PlaneGeometry(sceneW + 400, sceneD + 400);
-const ground    = new THREE.Mesh(groundGeo, matGround);
+// ── Ground + grid ─────────────────────────────────────────────────────────────
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(sceneW + 400, sceneD + 400), matGround,
+);
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// Grid — light blue
-const gridSize = Math.max(sceneW, sceneD) * 1.2;
-const grid = new THREE.GridHelper(gridSize, 30, 0x2244aa, 0x1a3366);
+const grid = new THREE.GridHelper(Math.max(sceneW, sceneD) * 1.2, 30, 0x2244aa, 0x1a3366);
 scene.add(grid);
 
+// ── OSM group (all live-render meshes live here) ──────────────────────────────
+const osmGroup = new THREE.Group();
+scene.add(osmGroup);
+
 // ── Progress helpers ──────────────────────────────────────────────────────────
-const loadMsg = document.getElementById('load-msg');
-const loadBar = document.getElementById('load-bar');
+const loadMsg  = document.getElementById('load-msg');
+const loadBar  = document.getElementById('load-bar');
 const statusEl = document.getElementById('status');
 const statsEl  = document.getElementById('stats');
-
 function setLoad(msg, pct) { loadMsg.textContent = msg; loadBar.style.width = pct + '%'; }
 function setStatus(msg)    { statusEl.textContent = msg; }
 
-// ── OSM fetch — via backend proxy (/api/osm/features) ─────────────────────────
+// ── Fetch OSM via backend proxy ────────────────────────────────────────────────
 setLoad('Fetching map data…', 10);
-
-const abort   = new AbortController();
-const abortId = setTimeout(() => abort.abort(), 60_000);
+const abortCtrl = new AbortController();
+const abortTmr  = setTimeout(() => abortCtrl.abort(), 60_000);
 
 let osmData;
 try {
   const qs   = new URLSearchParams({ west, south, east, north });
-  const resp = await fetch(`/api/osm/features?${qs}`, { signal: abort.signal });
-  clearTimeout(abortId);
+  const resp = await fetch(`/api/osm/features?${qs}`, { signal: abortCtrl.signal });
+  clearTimeout(abortTmr);
   if (!resp.ok) throw new Error(`Backend ${resp.status}`);
   osmData = await resp.json();
 } catch (e) {
-  clearTimeout(abortId);
-  const msg = e.name === 'AbortError' ? 'Timed out fetching map data' : 'Fetch failed: ' + e.message;
-  setStatus(msg);
+  clearTimeout(abortTmr);
+  setStatus(e.name === 'AbortError' ? 'Timed out — try a smaller area' : `Fetch error: ${e.message}`);
   document.getElementById('loading').style.display = 'none';
   throw e;
 }
 
 setLoad('Parsing features…', 40);
 
-// ── Parse ─────────────────────────────────────────────────────────────────────
 const nodes = new Map();
 const ways  = [];
-for (const el of osmData.elements) {
+for (const el of osmData.elements ?? []) {
   if (el.type === 'node') nodes.set(el.id, [el.lon, el.lat]);
   else if (el.type === 'way') ways.push(el);
 }
 
 function wayPts(way) {
-  return way.nodes.map(id => { const n = nodes.get(id); return n ? proj(n[0], n[1]) : null; })
-                  .filter(Boolean);
+  return way.nodes
+    .map(id => { const n = nodes.get(id); return n ? proj(n[0], n[1]) : null; })
+    .filter(Boolean);
 }
 
 // ── Geometry helpers ──────────────────────────────────────────────────────────
-
-// Flat polygon in XZ plane (y = elevation)
 function polyMesh(pts, elev, mat) {
   if (pts.length < 3) return null;
   const shape = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, z)));
@@ -293,32 +264,27 @@ function polyMesh(pts, elev, mat) {
   return mesh;
 }
 
-// Extruded building
 function buildingMesh(pts, height) {
   if (pts.length < 3) return null;
   try {
     const shape = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, z)));
     const geo   = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
     geo.rotateX(-Math.PI / 2);
-    // After rotateX(-PI/2): extrusion goes +Y from 0 to height ✓
     const mat   = height > 30 ? matBldgHi : height > 12 ? matBldgMid : matBldgLo;
     const mesh  = new THREE.Mesh(geo, mat);
-    mesh.castShadow    = true;
-    mesh.receiveShadow = true;
+    mesh.castShadow = mesh.receiveShadow = true;
     return mesh;
   } catch { return null; }
 }
 
-// Road ribbon in XZ plane
 function roadMesh(pts, width, elev, mat) {
   if (pts.length < 2) return null;
   const verts = [], idx = [];
   for (let i = 0; i < pts.length - 1; i++) {
     const [x0, z0] = pts[i], [x1, z1] = pts[i + 1];
-    const dx = x1 - x0, dz = z1 - z0;
-    const len = Math.sqrt(dx*dx + dz*dz);
+    const dx = x1-x0, dz = z1-z0, len = Math.hypot(dx, dz);
     if (len < 0.01) continue;
-    const nx = -dz / len * width / 2, nz = dx / len * width / 2;
+    const nx = -dz/len*width/2, nz = dx/len*width/2;
     const b = verts.length / 3;
     verts.push(x0+nx, elev, z0+nz,  x0-nx, elev, z0-nz,
                x1+nx, elev, z1+nz,  x1-nx, elev, z1-nz);
@@ -334,70 +300,68 @@ function roadMesh(pts, width, elev, mat) {
   return mesh;
 }
 
-// ── Render features ───────────────────────────────────────────────────────────
+// ── Render OSM features into osmGroup ─────────────────────────────────────────
 setLoad('Rendering features…', 60);
 
-const ROAD_W = { motorway:8, trunk:7, primary:6, secondary:5,
-                 tertiary:4, residential:3, unclassified:3, service:2, living_street:2.5 };
+const ROAD_W    = { motorway:8, trunk:7, primary:6, secondary:5,
+                    tertiary:4, residential:3, unclassified:3, service:2, living_street:2.5 };
 const ROAD_MAIN = new Set(['motorway','trunk','primary','secondary']);
-
 let nBuildings = 0, nRoads = 0;
-
-function add(mesh) { if (mesh) scene.add(mesh); }
 
 for (const way of ways) {
   const tags = way.tags ?? {};
   const pts  = wayPts(way);
 
-  // Landuse / parks
-  if (tags.landuse === 'park' || tags.landuse === 'recreation_ground' ||
+  if (tags.landuse === 'park'  || tags.landuse === 'recreation_ground' ||
       tags.landuse === 'grass' || tags.landuse === 'meadow' ||
-      tags.leisure === 'park'  || tags.leisure === 'garden' ||
-      tags.leisure === 'common') {
-    add(polyMesh(pts, 0.1, matPark));
+      tags.leisure === 'park'  || tags.leisure === 'garden' || tags.leisure === 'common') {
+    const m = polyMesh(pts, 0.1, matPark);
+    if (m) osmGroup.add(m);
     continue;
   }
-
-  // Water polygons
   if (tags.natural === 'water' || tags.landuse === 'reservoir') {
-    add(polyMesh(pts, 0.05, matWater));
+    const m = polyMesh(pts, 0.05, matWater);
+    if (m) osmGroup.add(m);
     continue;
   }
-
-  // Waterways (linear)
   if (tags.waterway) {
     const w = tags.waterway === 'river' ? 8 : tags.waterway === 'canal' ? 5 : 2;
-    add(roadMesh(pts, w, 0.05, matWater));
+    const m = roadMesh(pts, w, 0.05, matWater);
+    if (m) osmGroup.add(m);
     continue;
   }
-
-  // Roads
   if (tags.highway && ROAD_W[tags.highway]) {
-    const mat = ROAD_MAIN.has(tags.highway) ? matRoadMn : matRoad;
-    add(roadMesh(pts, ROAD_W[tags.highway], 0.2, mat));
-    nRoads++;
+    const m = roadMesh(pts, ROAD_W[tags.highway], 0.2,
+                       ROAD_MAIN.has(tags.highway) ? matRoadMn : matRoad);
+    if (m) { osmGroup.add(m); nRoads++; }
     continue;
   }
-
-  // Buildings
   if (tags.building && tags.building !== 'no') {
     const levels = parseFloat(tags['building:levels'] ?? '2');
     const height = parseFloat(tags['building:height'] ?? String(levels * 3.2));
-    add(buildingMesh(pts, Math.max(height, 3)));
-    nBuildings++;
+    const m = buildingMesh(pts, Math.max(height, 3));
+    if (m) { osmGroup.add(m); nBuildings++; }
   }
 }
 
-setLoad('Finalising…', 90);
-
-// Fit camera to scene bounds
+setLoad('Done', 100);
 controls.update();
 setStatus('');
 statsEl.textContent = `${nBuildings} buildings · ${nRoads} roads`;
 document.getElementById('loading').style.display = 'none';
-setLoad('Done', 100);
 
-// ── Print preview mode (load actual STL parts) ────────────────────────────────
+// ── Print Preview — load the 3 STL pieces ────────────────────────────────────
+const printGroup = new THREE.Group();
+printGroup.visible = false;
+scene.add(printGroup);
+
+// Print material colors — same three-color scheme as the physical print
+const PRINT_MAT = {
+  buildings: { solid: 0x909088, wire: WIRE.bldgLo  },
+  land:      { solid: 0x4a8a4a, wire: WIRE.park     },
+  water:     { solid: 0x2a6aaa, wire: WIRE.water    },
+};
+
 if (hasPrintParts) {
   document.getElementById('btn-mode').style.display = 'block';
   document.getElementById('stl-links').style.display = 'block';
@@ -406,93 +370,90 @@ if (hasPrintParts) {
   document.getElementById('dl-water').href     = stlWater;
 }
 
-// STL print parts — loaded on demand, hidden by default
-const printGroup = new THREE.Group();
-printGroup.visible = false;
-scene.add(printGroup);
-
-const PRINT_SOLID  = { buildings: 0xc8c0b8, land: 0x7ab87a, water: 0x4488cc };
-const PRINT_WIRE   = { buildings: 0x00ffff, land: 0x00ff66, water: 0x00aaff };
-
 let printLoaded = false;
-let showingPrint = false;
 
 async function loadPrintParts() {
   if (printLoaded) return;
   setStatus('Loading print model…');
+
   const loader = new STLLoader();
-  const parts = [
+  const defs = [
     { url: stlBuildings, key: 'buildings' },
-    { url: stlLand,      key: 'land' },
-    { url: stlWater,     key: 'water' },
+    { url: stlLand,      key: 'land'      },
+    { url: stlWater,     key: 'water'     },
   ];
-  for (const { url, key } of parts) {
-    await new Promise((resolve, reject) => {
-      loader.load(url, (geo) => {
-        geo.computeVertexNormals();
-        geo.center();
-        geo.rotateX(-Math.PI / 2);
-        geo.computeBoundingBox();
-        const box = geo.boundingBox;
-        const mat = new THREE.MeshStandardMaterial({
-          color: PRINT_SOLID[key], roughness: 0.7, metalness: 0.05,
-        });
-        mat._solidColor = PRINT_SOLID[key];
-        mat._wireColor  = PRINT_WIRE[key];
-        allMats.push(mat);
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.y = -box.min.y;
-        mesh.castShadow = mesh.receiveShadow = true;
-        printGroup.add(mesh);
-        resolve(null);
-      }, undefined, reject);
-    }).catch(() => {});
+
+  // Load all three, preserving relative positions (no individual centering)
+  for (const { url, key } of defs) {
+    try {
+      const geo = await new Promise((res, rej) => loader.load(url, res, undefined, rej));
+      geo.computeVertexNormals();
+      // Rotate STL Z-up → Three.js Y-up
+      geo.rotateX(-Math.PI / 2);
+
+      const cfg = PRINT_MAT[key];
+      const mat = new THREE.MeshStandardMaterial({
+        color: cfg.solid, roughness: 0.65, metalness: 0.05,
+      });
+      mat._solidColor = cfg.solid;
+      mat._wireColor  = cfg.wire;
+      allMats.push(mat);
+
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = mesh.receiveShadow = true;
+      printGroup.add(mesh);
+    } catch (err) {
+      console.warn(`Failed to load ${key} STL:`, err);
+    }
   }
+
+  // Centre the whole group (all 3 parts together, preserving their relative positions)
+  const box = new THREE.Box3().setFromObject(printGroup);
+  const centre = new THREE.Vector3();
+  box.getCenter(centre);
+  printGroup.position.set(-centre.x, -box.min.y, -centre.z);
+
   printLoaded = true;
   setStatus('');
 }
 
+let showingPrint = false;
+
 document.getElementById('btn-mode')?.addEventListener('click', async function() {
   if (!showingPrint) {
+    this.textContent = 'Loading…';
+    this.classList.add('on');
     await loadPrintParts();
-    showingPrint = true;
-    // Hide OSM scene objects (everything not in printGroup or grid/ground)
-    scene.traverse(obj => {
-      if (obj !== scene && !printGroup.getObjectById(obj.id) &&
-          obj !== grid && obj !== ground &&
-          obj !== printGroup && !(obj instanceof THREE.Light)) {
-        obj.visible = false;
-      }
-    });
+    showingPrint   = true;
+    osmGroup.visible   = false;
     printGroup.visible = true;
     this.textContent = '🌍 Map View';
-    this.classList.add('on');
   } else {
-    showingPrint = false;
+    showingPrint       = false;
+    osmGroup.visible   = true;
     printGroup.visible = false;
-    scene.traverse(obj => { obj.visible = true; });
     this.textContent = '🖨 Print Preview';
     this.classList.remove('on');
   }
 });
 
-// ── Controls ──────────────────────────────────────────────────────────────────
+// ── Wireframe toggle ──────────────────────────────────────────────────────────
 let wireframe = false;
 document.getElementById('btn-wire').addEventListener('click', function() {
   wireframe = !wireframe;
-  scene.background.set(wireframe ? 0x000000 : pal.bg);
-  if (scene.fog) scene.fog.color.set(wireframe ? 0x000000 : pal.bg);
+  scene.background.set(wireframe ? 0x000000 : BG);
+  if (scene.fog) scene.fog.color.set(wireframe ? 0x000000 : BG);
   allMats.forEach(m => {
     m.wireframe = wireframe;
     m.color.set(wireframe ? m._wireColor : m._solidColor);
   });
-  // Grid: bright blue in wireframe, subtle in solid
   grid.material[0].color.set(wireframe ? 0x0055ff : 0x2244aa);
   grid.material[1].color.set(wireframe ? 0x003399 : 0x1a3366);
   this.classList.toggle('on', wireframe);
   this.textContent = wireframe ? '⬡ Solid' : '⬡ Wireframe';
 });
 
+// ── Auto-rotate ───────────────────────────────────────────────────────────────
 document.getElementById('btn-rotate').addEventListener('click', function() {
   controls.autoRotate = !controls.autoRotate;
   this.classList.toggle('on', controls.autoRotate);
