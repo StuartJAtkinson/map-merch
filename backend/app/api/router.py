@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from contextlib import asynccontextmanager
+import asyncio
+import functools
 import os
 
 from app.core.config import get_settings
@@ -78,7 +80,10 @@ async def generate_svg(req: SVGGenerationRequest):
     global _current_bbox
     osm_data = await osm_fetcher.fetch_area(req.bbox)
     _current_bbox = req.bbox.model_dump()
-    svg_io = svg_generator.generate(
+    bbox_tuple = (req.bbox.west, req.bbox.south, req.bbox.east, req.bbox.north)
+    loop = asyncio.get_event_loop()
+    svg_io = await loop.run_in_executor(None, functools.partial(
+        svg_generator.generate,
         osm_data=osm_data,
         merch_type=req.merch_type,
         style=req.style,
@@ -86,13 +91,8 @@ async def generate_svg(req: SVGGenerationRequest):
         include_buildings=req.include_buildings,
         include_roads=req.include_roads,
         include_parks=req.include_parks,
-        bbox=(
-            req.bbox.west,
-            req.bbox.south,
-            req.bbox.east,
-            req.bbox.north,
-        ),
-    )
+        bbox=bbox_tuple,
+    ))
     from datetime import datetime
     timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
     filename = os.path.join(DATA_DIR, "svg_output", f"design_{timestamp}.svg")
@@ -106,14 +106,19 @@ async def generate_stl(req: STLGenerationRequest):
     global _current_bbox
     osm_data = await osm_fetcher.fetch_area(req.bbox)
     _current_bbox = req.bbox.model_dump()
-    from datetime import datetime
-    parts = stl_generator.generate(
+    bbox_tuple = (req.bbox.west, req.bbox.south, req.bbox.east, req.bbox.north)
+    loop = asyncio.get_event_loop()
+    # Run in thread — STL generator is CPU-bound (shapely/trimesh) and may
+    # make a blocking HTTP call to OpenTopoData for elevation data.
+    parts = await loop.run_in_executor(None, functools.partial(
+        stl_generator.generate,
         osm_data=osm_data,
         merch_type=req.merch_type,
         height_mm=req.height_mm,
         base_thickness_mm=req.base_thickness_mm,
-        bbox=(req.bbox.west, req.bbox.south, req.bbox.east, req.bbox.north),
-    )
+        bbox=bbox_tuple,
+    ))
+    from datetime import datetime
     timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
     urls = {}
     for part_name, bio in parts.items():
