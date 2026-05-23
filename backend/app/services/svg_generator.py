@@ -1,3 +1,4 @@
+import math
 import svgwrite
 from io import BytesIO, StringIO
 
@@ -157,27 +158,35 @@ class SVGGenerator:
         palette = STYLES.get(style, STYLES['osm_default'])
 
         svg = svgwrite.Drawing(size=(str(self._svg_w), str(self._svg_h)))
+
+        # Background behind clip region
         svg.add(svg.rect(insert=(0, 0), size=(self._svg_w, self._svg_h),
                          fill=palette['background']))
 
+        # Hard clip — everything outside the canvas boundary is cut off
+        clip = svg.defs.add(svg.clipPath(id='map-clip'))
+        clip.add(svg.rect(insert=(0, 0), size=(self._svg_w, self._svg_h)))
+        g = svg.add(svg.g(clip_path='url(#map-clip)'))
+
         # Draw order: land → water → buildings → roads → railways → labels
         if include_parks:
-            self._draw_landuse(svg, palette)
+            self._draw_landuse(g, palette)
 
-        self._draw_water(svg, palette)
+        self._draw_water(g, palette)
 
         if palette['show_buildings'] and include_buildings:
-            self._draw_buildings(svg, palette)
+            self._draw_buildings(g, palette)
 
         if include_roads:
-            self._draw_roads(svg, palette)
+            self._draw_roads(g, palette)
 
         if palette['show_railways']:
-            self._draw_railways(svg, palette)
+            self._draw_railways(g, palette)
 
         if include_labels and palette['show_labels']:
-            self._draw_labels(svg, palette)
+            self._draw_labels(g, palette)
 
+        # Attribution outside the clip (always visible)
         self._draw_attribution(svg)
 
         sio = StringIO()
@@ -205,9 +214,21 @@ class SVGGenerator:
     # ── Projection ────────────────────────────────────────────────────────────
 
     def _project(self, lon: float, lat: float) -> tuple[float, float]:
+        """Project WGS84 lon/lat to SVG pixels with cosine-of-latitude correction.
+
+        Without this, east-west features appear ~1/cos(lat) times too wide
+        relative to north-south features (e.g. ~1.7× stretch at latitude 54°).
+        """
         west, south, east, north = self._bbox
-        x = (lon - west)  / (east - west)  * self._svg_w
-        y = (1.0 - (lat - south) / (north - south)) * self._svg_h
+        mid_lat = (south + north) / 2
+        cos_lat = math.cos(math.radians(mid_lat))
+        # Convert everything to metric offsets from SW corner
+        x_m = (lon - west) * cos_lat * 111_320
+        y_m = (lat - south) * 111_320
+        bbox_w_m = (east - west) * cos_lat * 111_320
+        bbox_h_m = (north - south) * 111_320
+        x = x_m / bbox_w_m * self._svg_w
+        y = (1.0 - y_m / bbox_h_m) * self._svg_h
         return x, y
 
     def _way_points(self, way: dict) -> list[tuple[float, float]]:

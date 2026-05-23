@@ -60,14 +60,14 @@ body {
   -webkit-backdrop-filter: blur(14px);
 }
 .panel h2 {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: 0.02em;
   margin-bottom: 14px;
 }
 .panel h3 {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-label);
   text-transform: uppercase;
@@ -79,13 +79,13 @@ body {
 .btn {
   display: block;
   width: 100%;
-  padding: 8px 10px;
-  margin-top: 6px;
+  padding: 9px 10px;
+  margin-top: 7px;
   background: transparent;
   border: 1px solid var(--border-item);
   border-radius: var(--radius-btn);
   color: var(--text-mid);
-  font-size: 11px;
+  font-size: 12px;
   font-family: inherit;
   cursor: pointer;
   text-align: center;
@@ -131,14 +131,14 @@ body {
   margin: 8px 0 6px;
 }
 .section-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-sublabel);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin: 10px 0 5px;
 }
 .dl-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
   margin-bottom: 4px;
 }
@@ -148,22 +148,22 @@ body {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin: 4px 0;
-  font-size: 10px;
+  margin: 5px 0;
+  font-size: 12px;
   color: var(--text-muted);
 }
 .param-row label {
-  min-width: 76px;
+  min-width: 82px;
   color: var(--text-high);
-  font-size: 10px;
+  font-size: 12px;
 }
 .param-row input[type="number"] {
-  width: 48px;
+  width: 52px;
   background: var(--bg-item);
   border: 1px solid var(--border-item);
   border-radius: var(--radius-input);
   color: var(--text-high);
-  font-size: 10px;
+  font-size: 11px;
   padding: 3px 5px;
   text-align: center;
   font-family: monospace;
@@ -182,7 +182,7 @@ body {
   justify-content: space-between;
   padding: 5px 0;
 }
-.toggle-row span { font-size: 12px; color: var(--text-high); }
+.toggle-row span { font-size: 13px; color: var(--text-high); }
 .toggle {
   width: 38px; height: 20px;
   background: var(--toggle-track);
@@ -230,7 +230,7 @@ body {
 
 /* ── Hint text ─────────────────────────────────────────────────────────────── */
 .hint {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
   line-height: 1.9;
   border-top: 1px solid var(--border-dim);
