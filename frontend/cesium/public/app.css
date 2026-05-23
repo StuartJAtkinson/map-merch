@@ -1,0 +1,251 @@
+/* ── Heart on a Sleeve — shared design system ──────────────────────────────── */
+
+:root {
+  /* Page backgrounds */
+  --bg-page:    #0a0a10;
+  --bg-panel:   rgba(8, 8, 14, 0.96);
+  --bg-item:    #12121e;
+  --bg-hover:   #1a1a28;
+
+  /* Borders */
+  --border-panel:  #38384a;
+  --border-item:   #333345;
+  --border-dim:    #2a2a38;
+
+  /* Text */
+  --text-primary:  #ffffff;
+  --text-high:     #ddddee;
+  --text-mid:      #aaaacc;
+  --text-muted:    #8888aa;
+  --text-dim:      #666680;
+  --text-faint:    #44445a;
+
+  /* Labels / section heads */
+  --text-label:    #8a8aaa;
+  --text-sublabel: #7070a0;
+
+  /* Accent */
+  --accent:        #4a9eff;
+  --accent-soft:   rgba(74, 158, 255, 0.08);
+  --accent-border: rgba(74, 158, 255, 0.5);
+
+  /* Toggle */
+  --toggle-track:  #333345;
+  --toggle-dot:    #888899;
+  --toggle-on:     #4a9eff;
+
+  /* Radii / spacing */
+  --radius-panel:  10px;
+  --radius-btn:    6px;
+  --radius-input:  4px;
+  --panel-pad:     16px;
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg-page);
+  color: var(--text-mid);
+  overflow: hidden;
+}
+
+/* ── Glass panel ────────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--radius-panel);
+  padding: var(--panel-pad);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.panel h2 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  margin-bottom: 14px;
+}
+.panel h3 {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-label);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 14px 0 7px;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────────  */
+.btn {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  margin-top: 6px;
+  background: transparent;
+  border: 1px solid var(--border-item);
+  border-radius: var(--radius-btn);
+  color: var(--text-mid);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  line-height: 1.3;
+}
+.btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn.on, .btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-btn);
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 10px;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+.btn-primary:hover  { background: #3a8eef; }
+.btn-primary:disabled { background: #1e3050; color: #3a5a7a; cursor: not-allowed; }
+
+/* ── Dividers & labels ────────────────────────────────────────────────────── */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border-dim);
+  margin: 8px 0 6px;
+}
+.section-label {
+  font-size: 10px;
+  color: var(--text-sublabel);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 10px 0 5px;
+}
+.dl-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+/* ── Parameter rows ───────────────────────────────────────────────────────── */
+.param-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 4px 0;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.param-row label {
+  min-width: 76px;
+  color: var(--text-high);
+  font-size: 10px;
+}
+.param-row input[type="number"] {
+  width: 48px;
+  background: var(--bg-item);
+  border: 1px solid var(--border-item);
+  border-radius: var(--radius-input);
+  color: var(--text-high);
+  font-size: 10px;
+  padding: 3px 5px;
+  text-align: center;
+  font-family: monospace;
+  outline: none;
+  transition: border-color 0.1s;
+}
+.param-row input[type="number"]:focus {
+  border-color: var(--accent);
+}
+.param-row span { color: var(--text-dim); font-size: 10px; }
+
+/* ── Toggle switch ────────────────────────────────────────────────────────── */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+}
+.toggle-row span { font-size: 12px; color: var(--text-high); }
+.toggle {
+  width: 38px; height: 20px;
+  background: var(--toggle-track);
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.18s;
+}
+.toggle::after {
+  content: '';
+  position: absolute;
+  width: 14px; height: 14px;
+  background: var(--toggle-dot);
+  border-radius: 50%;
+  top: 3px; left: 3px;
+  transition: left 0.18s, background 0.18s;
+}
+.toggle.on { background: var(--toggle-on); }
+.toggle.on::after { left: 21px; background: #fff; }
+
+/* ── Loading screen ───────────────────────────────────────────────────────── */
+#loading {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: var(--bg-page);
+  color: var(--text-muted);
+  font-size: 13px;
+  gap: 14px;
+  z-index: 20;
+}
+#load-bar-wrap {
+  width: 200px; height: 2px;
+  background: var(--border-dim);
+  border-radius: 1px;
+}
+#load-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 1px;
+  width: 0;
+  transition: width 0.3s;
+}
+
+/* ── Hint text ─────────────────────────────────────────────────────────────── */
+.hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.9;
+  border-top: 1px solid var(--border-dim);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+/* ── Spinner ────────────────────────────────────────────────────────────────── */
+.spinner {
+  display: none;
+  width: 15px; height: 15px;
+  border: 2px solid var(--border-item);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin: 0 auto 2px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }

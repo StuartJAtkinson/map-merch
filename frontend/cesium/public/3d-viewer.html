@@ -3,45 +3,17 @@
 <head>
   <meta charset="UTF-8"/>
   <title>Heart on a Sleeve — 3D Map</title>
+  <link rel="stylesheet" href="/app.css">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0d0e0f; overflow: hidden; font-family: system-ui, sans-serif; }
+    /* 3D viewer specific */
     canvas { display: block; }
-
     #overlay {
       position: absolute; top: 20px; left: 20px;
-      background: rgba(8,8,14,0.96); border: 1px solid #38384a;
-      border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(12px);
-      color: #bbb; font-size: 12px; min-width: 180px; z-index: 10;
+      min-width: 185px; z-index: 10;
     }
-    #overlay h2 { font-size: 13px; color: #fff; font-weight: 600; margin-bottom: 8px; }
-    #stats  { font-size: 10px; color: #888; line-height: 1.9; margin-bottom: 4px; }
-    #status { font-size: 11px; color: #aaa; min-height: 16px; margin-bottom: 6px; }
-    .btn {
-      display: block; width: 100%; margin-top: 6px; padding: 7px;
-      background: transparent; border: 1px solid #333345; border-radius: 6px;
-      color: #aaa; font-size: 11px; cursor: pointer; text-align: center;
-      transition: all 0.12s; text-decoration: none;
-    }
-    .btn:hover { border-color: #4a9eff; color: #4a9eff; }
-    .btn.on    { border-color: #4a9eff; color: #4a9eff; background: rgba(74,158,255,0.08); }
-    .divider   { border-top: 1px solid #2a2a38; margin: 8px 0 4px; }
-    .dl-label  { font-size: 10px; color: #7777aa; margin-bottom: 2px; }
-    .param-row { display:flex; align-items:center; gap:4px; margin:3px 0; font-size:10px; color:#999; }
-    .param-row label { min-width:72px; color:#bbb; }
-    .param-row input { width:46px; background:#12121e; border:1px solid #333345; border-radius:3px;
-                       color:#ddd; font-size:10px; padding:2px 4px; text-align:center; }
-    .param-row span  { color:#777; }
-    #hint { font-size: 10px; color: #666; margin-top: 8px; line-height: 1.9;
-            border-top: 1px solid #2a2a38; padding-top: 7px; }
-
-    #loading {
-      position: fixed; inset: 0; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; background: #0d0e0f;
-      color: #888; font-size: 13px; gap: 12px; z-index: 20;
-    }
-    #load-bar-wrap { width: 200px; height: 2px; background: #1a1a24; border-radius: 1px; }
-    #load-bar { height: 100%; background: #4a9eff; border-radius: 1px; width: 0; transition: width 0.3s; }
+    #stats  { font-size: 10px; color: var(--text-muted); line-height: 1.9; margin-bottom: 4px; }
+    #status { font-size: 11px; color: var(--text-mid);   min-height: 16px; margin-bottom: 6px; }
+    #regen-status { font-size: 10px; color: var(--text-muted); margin-top: 4px; text-align: center; }
   </style>
 </head>
 <body>
@@ -83,7 +55,7 @@
   </div>
 
   <button class="btn" onclick="window.close()">✕ Close</button>
-  <div id="hint">
+  <div class="hint">
     Left drag — orbit<br>
     Right drag — zoom<br>
     Middle drag — pan<br>

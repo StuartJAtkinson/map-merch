@@ -4,105 +4,72 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Heart on a Sleeve — Map Selector</title>
+    <link rel="stylesheet" href="/app.css">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: system-ui, sans-serif; background: #0a0a0a; color: #e0e0e0; }
-
+        /* ── Map-selector-specific styles only ── */
         #cesiumContainer { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
 
-        /* ── Control Panel ── */
         #panel {
             position: absolute; top: 20px; left: 20px; width: 300px;
-            background: rgba(10,10,16,0.96); border: 1px solid #38384a;
-            border-radius: 12px; padding: 18px; z-index: 1000;
-            backdrop-filter: blur(12px);
-            max-height: calc(100vh - 40px); overflow-y: auto;
+            max-height: calc(100vh - 40px); overflow-y: auto; z-index: 1000;
         }
-        #panel h2 { font-size: 15px; font-weight: 700; margin-bottom: 14px; color: #fff; letter-spacing: 0.02em; }
-        #panel h3 {
-            font-size: 10px; font-weight: 600; color: #8a8aaa;
-            text-transform: uppercase; letter-spacing: 0.1em; margin: 14px 0 7px;
-        }
-        .section-label {
-            font-size: 10px; color: #7070a0; text-transform: uppercase;
-            letter-spacing: 0.08em; margin: 10px 0 5px;
-        }
+
         .section { margin-bottom: 16px; }
 
         /* Merch grids */
         .merch-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
         .merch-btn {
-            background: #141420; border: 1.5px solid #2a2a36; color: #aaa;
-            padding: 8px 4px; border-radius: 7px; cursor: pointer;
-            font-size: 11px; text-align: center; transition: all 0.12s; line-height: 1.3;
+            background: var(--bg-item); border: 1.5px solid var(--border-dim);
+            color: var(--text-mid); padding: 8px 4px; border-radius: 7px;
+            cursor: pointer; font-size: 11px; text-align: center;
+            transition: all 0.12s; line-height: 1.3; font-family: inherit;
         }
-        .merch-btn:hover { border-color: #555; color: #eee; }
-        .merch-btn.active { border-color: #4a9eff; color: #4a9eff; background: rgba(74,158,255,0.07); }
-        .merch-btn .ratio { font-size: 9px; color: #666; margin-top: 2px; }
+        .merch-btn:hover { border-color: var(--border-item); color: var(--text-high); }
+        .merch-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+        .merch-btn .ratio { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
         .merch-btn.active .ratio { color: #3a7acc; }
-
-        .merch-divider {
-            border: none; border-top: 1px solid #1e1e28; margin: 8px 0 5px;
-        }
+        .merch-divider { border: none; border-top: 1px solid var(--border-dim); margin: 8px 0 5px; }
 
         /* Style selector */
         .style-grid { display: flex; flex-direction: column; gap: 5px; }
         .style-btn {
-            background: #141420; border: 1.5px solid #2a2a36; color: #aaa;
-            padding: 7px 10px; border-radius: 6px; cursor: pointer;
-            font-size: 12px; text-align: left; transition: all 0.12s;
+            background: var(--bg-item); border: 1.5px solid var(--border-dim);
+            color: var(--text-mid); padding: 7px 10px; border-radius: 6px;
+            cursor: pointer; font-size: 12px; text-align: left;
+            transition: all 0.12s; font-family: inherit;
         }
-        .style-btn:hover { border-color: #555; color: #ddd; }
-        .style-btn.active { border-color: #4a9eff; color: #fff; background: rgba(74,158,255,0.07); }
-
-        /* Toggles */
-        .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; }
-        .toggle-row span { font-size: 12px; color: #ccc; }
-        .toggle { width: 38px; height: 20px; background: #333345; border-radius: 10px; position: relative; cursor: pointer; flex-shrink: 0; }
-        .toggle::after { content: ''; position: absolute; width: 14px; height: 14px; background: #888; border-radius: 50%; top: 3px; left: 3px; transition: 0.18s; }
-        .toggle.on { background: #4a9eff; }
-        .toggle.on::after { left: 21px; background: #fff; }
+        .style-btn:hover { border-color: var(--border-item); color: var(--text-high); }
+        .style-btn.active { border-color: var(--accent); color: var(--text-primary); background: var(--accent-soft); }
 
         /* Bbox display */
-        #bbox-display { font-size: 10px; color: #888; font-family: monospace; margin-top: 6px; line-height: 1.7; }
+        #bbox-display { font-size: 10px; color: var(--text-muted); font-family: monospace; margin-top: 6px; line-height: 1.7; }
 
-        /* Buttons */
-        .btn-primary {
-            width: 100%; padding: 11px; background: #4a9eff; color: #fff;
-            border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
-            cursor: pointer; margin-top: 10px; transition: background 0.15s;
-        }
-        .btn-primary:hover { background: #3a8eef; }
-        .btn-primary:disabled { background: #1e3050; color: #3a5a7a; cursor: not-allowed; }
-        .btn-secondary {
-            flex: 1; padding: 9px 6px; background: transparent; color: #aaa;
-            border: 1px solid #333345; border-radius: 7px; font-size: 12px;
-            cursor: pointer; transition: all 0.12s; text-align: center;
-        }
-        .btn-secondary:hover { border-color: #4a9eff; color: #4a9eff; }
+        /* Draw + secondary buttons */
         .btn-draw {
-            width: 100%; padding: 9px; background: transparent; color: #aaa;
-            border: 1px solid #333345; border-radius: 7px; font-size: 12px;
+            width: 100%; padding: 9px; background: transparent;
+            color: var(--text-mid); border: 1px solid var(--border-item);
+            border-radius: var(--radius-btn); font-size: 12px; font-family: inherit;
             cursor: pointer; margin-bottom: 6px; transition: all 0.12s; text-align: center;
         }
-        .btn-draw:hover { border-color: #666; color: #ddd; }
+        .btn-draw:hover { border-color: var(--border-panel); color: var(--text-high); }
+
+        .btn-secondary {
+            flex: 1; padding: 9px 6px; background: transparent;
+            color: var(--text-mid); border: 1px solid var(--border-item);
+            border-radius: var(--radius-btn); font-size: 12px; font-family: inherit;
+            cursor: pointer; transition: all 0.12s; text-align: center;
+        }
+        .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
 
         #output-btns { display: none; gap: 7px; margin-top: 8px; }
-        #status { font-size: 11px; color: #999; margin-top: 10px; text-align: center; min-height: 16px; }
-
-        .spinner {
-            display: none; width: 16px; height: 16px; border: 2px solid #2a3a4a;
-            border-top-color: #4a9eff; border-radius: 50%;
-            animation: spin 0.7s linear infinite; margin: 0 auto 2px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        #status { font-size: 11px; color: var(--text-muted); margin-top: 10px; text-align: center; min-height: 16px; }
     </style>
 </head>
 <body>
 
 <div id="cesiumContainer"></div>
 
-<div id="panel">
+<div id="panel" class="panel">
     <h2>Heart on a Sleeve</h2>
 
     <div class="section">
@@ -113,33 +80,18 @@
 
     <div class="section">
         <h3>2. Merch Type</h3>
-
         <div class="section-label">Fabrics &amp; Transfers</div>
         <div class="merch-grid">
-            <div class="merch-btn active" data-type="tshirt">
-                T-Shirt<div class="ratio">3:4</div>
-            </div>
-            <div class="merch-btn" data-type="mug">
-                Mug<div class="ratio">9:3</div>
-            </div>
-            <div class="merch-btn" data-type="tote">
-                Tote Bag<div class="ratio">2:3</div>
-            </div>
+            <div class="merch-btn active" data-type="tshirt">T-Shirt<div class="ratio">3:4</div></div>
+            <div class="merch-btn" data-type="mug">Mug<div class="ratio">9:3</div></div>
+            <div class="merch-btn" data-type="tote">Tote Bag<div class="ratio">2:3</div></div>
         </div>
-
         <hr class="merch-divider">
-
         <div class="section-label">3D Prints</div>
         <div class="merch-grid">
-            <div class="merch-btn" data-type="coaster">
-                Coaster<div class="ratio">1:1</div>
-            </div>
-            <div class="merch-btn" data-type="placemat">
-                Placemat<div class="ratio">14:10</div>
-            </div>
-            <div class="merch-btn" data-type="3d_print">
-                Relief<div class="ratio">1:1</div>
-            </div>
+            <div class="merch-btn" data-type="coaster">Coaster<div class="ratio">1:1</div></div>
+            <div class="merch-btn" data-type="placemat">Placemat<div class="ratio">14:10</div></div>
+            <div class="merch-btn" data-type="3d_print">Relief<div class="ratio">1:1</div></div>
         </div>
     </div>
 
@@ -154,14 +106,8 @@
 
     <div class="section">
         <h3>4. Include</h3>
-        <div class="toggle-row">
-            <span>Place labels</span>
-            <div class="toggle on" id="tog-labels"></div>
-        </div>
-        <div class="toggle-row">
-            <span>Buildings</span>
-            <div class="toggle on" id="tog-buildings"></div>
-        </div>
+        <div class="toggle-row"><span>Place labels</span><div class="toggle on" id="tog-labels"></div></div>
+        <div class="toggle-row"><span>Buildings</span><div class="toggle on" id="tog-buildings"></div></div>
     </div>
 
     <button class="btn-primary" id="generate-btn" disabled>
