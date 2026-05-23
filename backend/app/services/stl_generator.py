@@ -1,27 +1,39 @@
 """
-3-colour STL generator — produces three interlocking pieces per print:
+3-colour interlocking STL generator.
 
-  buildings.stl  (grey)   — all building pillars + road ribbons, solid from Z=0
-  land.stl       (green)  — flat slab (or terrain surface) with cutouts where
-                             buildings and water sit, so all three pieces slot together
-  water.stl      (blue)   — water body fills, slightly below land level
+Three separate printable pieces that assemble into a complete map model:
 
-Two modes:
-  FLAT      (coaster, placemat) — no elevation; uniform building heights; plexi-flat surface
-  TOPOLOGY  (3d_print)          — SRTM elevation fetched from OpenTopoData;
-                                   terrain mesh; buildings placed at their ground elevation
+  buildings.stl (grey)
+      All building pillars + road ribbons, Z=0 → BLDG_H.
+      Simplified polygons, small gaps closed, minimum 1 mm height.
+
+  water.stl (blue)
+      All water bodies + buffered waterways, Z=0 → WATER_H.
+      Building/road shapes punched out so the grey pillars slot through.
+
+  land.stl (green) — the locking lid
+      Everything that isn't buildings, roads, or water.
+      Z=WATER_H → BLDG_H (slides down over building tops, sits on water layer).
+      Flat for coaster/placemat; terrain surface for relief/topology mode.
+
+Assembly: lay blue water disc → slot grey buildings through holes → slide green
+lid down over building tops. The lid physically locks the stack.
 """
 
 import math
 import requests
 import trimesh
 import numpy as np
-from shapely.geometry import Polygon, MultiPolygon, box as shapely_box
+from shapely.geometry import (
+    Polygon, MultiPolygon, LineString,
+    box as shapely_box,
+)
 from shapely.ops import unary_union
 from shapely.validation import make_valid
 from io import BytesIO
 
 
+# Physical plate size (mm) per merch type
 PLATE_MM: dict[str, tuple[float, float]] = {
     'tshirt':   (100.0, 133.0),
     'mug':      (150.0,  50.0),
@@ -30,15 +42,24 @@ PLATE_MM: dict[str, tuple[float, float]] = {
     'tote':     (100.0, 150.0),
     '3d_print': (100.0, 100.0),
 }
-
 TOPOLOGY_TYPES = {'3d_print'}
 
+# Road widths in mm (for building layer — roads are structural pillars too)
 ROAD_WIDTH_MM: dict[str, float] = {
-    'motorway': 2.5, 'trunk': 2.2, 'primary': 2.0, 'secondary': 1.6,
-    'tertiary': 1.2, 'residential': 0.9, 'unclassified': 0.9, 'service': 0.6,
+    'motorway': 3.0, 'trunk': 2.8, 'primary': 2.5, 'secondary': 2.0,
+    'tertiary': 1.5, 'residential': 1.2, 'unclassified': 1.2, 'service': 0.8,
 }
 WATER_POLY_TAGS = {'water', 'reservoir', 'lake', 'pond', 'basin', 'lagoon'}
-WATERWAY_WIDTH_MM = {'river': 4.0, 'canal': 3.0, 'stream': 1.5}
+WATERWAY_WIDTH_MM: dict[str, float] = {
+    'river': 4.0, 'canal': 3.0, 'stream': 1.5, 'drain': 1.0,
+}
+
+# Height constants (mm)
+BLDG_H_FLAT  = 5.0   # uniform building height for flat mode
+WATER_H      = 1.5   # water layer thickness
+MIN_BLDG_H   = 1.0   # minimum height for any building
+GAP_CLOSE_MM = 0.8   # gaps smaller than this between buildings are merged
+WATER_EXPAND = 0.5   # how much water expands beyond its OSM boundary
 
 
 class STLGenerator:
@@ -47,11 +68,10 @@ class STLGenerator:
         self,
         osm_data: dict,
         merch_type: str,
-        height_mm: float = 6.0,
+        height_mm: float = 5.0,
         base_thickness_mm: float = 2.0,
         bbox: tuple[float, float, float, float] | None = None,
     ) -> dict[str, BytesIO]:
-        """Returns {'buildings': BytesIO, 'land': BytesIO, 'water': BytesIO}."""
         west, south, east, north = bbox or (-0.13, 51.50, -0.11, 51.52)
         plate_w, plate_h = PLATE_MM.get(merch_type, (100.0, 100.0))
         lon_span = east - west
@@ -73,215 +93,219 @@ class STLGenerator:
             elif t == 'way':
                 ways.append(el)
 
-        if merch_type in TOPOLOGY_TYPES:
-            elev_grid = _fetch_elevation(west, south, east, north)
-        else:
-            elev_grid = None
+        topology = merch_type in TOPOLOGY_TYPES
+        elev_grid = _fetch_elevation(west, south, east, north) if topology else None
 
-        return self._build_3color(
-            ways, nodes, way_pts, proj,
-            plate_w, plate_h, base_thickness_mm, height_mm,
-            elev_grid, west, south, east, north,
+        bldg_h = height_mm if topology else BLDG_H_FLAT
+
+        return self._build(
+            ways, way_pts, plate_w, plate_h,
+            bldg_h, topology, elev_grid,
         )
 
-    # ── 3-colour build ─────────────────────────────────────────────────────────
+    # ── Main build ─────────────────────────────────────────────────────────────
 
-    def _build_3color(
-        self, ways, nodes, way_pts, proj,
-        plate_w, plate_h, base_mm, height_mm,
-        elev_grid, west, south, east, north,
+    def _build(
+        self, ways, way_pts,
+        plate_w, plate_h, bldg_h,
+        topology, elev_grid,
     ) -> dict[str, BytesIO]:
-        topology = elev_grid is not None
 
-        LAND_H   = 3.0                  # land slab height above base
-        BLDG_H   = height_mm            # building pillar height above base
-        ROAD_H   = 0.5                  # road height above land surface
-        WATER_H  = LAND_H - 0.8        # water slightly below land (creates visible recess)
-
-        land_z  = base_mm
-        bldg_z  = base_mm  # buildings start from the absolute base (pillars)
-        water_z = base_mm
-
-        # ── Collect geometry ─────────────────────────────────────────────────
-        bldg_shapes:  list[Polygon] = []
-        road_shapes:  list[tuple[Polygon, float]] = []  # (shape, road_height_above_land)
-        water_shapes: list[Polygon] = []
-        wway_shapes:  list[tuple[Polygon, float]] = []
+        # ── 1. Collect raw shapes ──────────────────────────────────────────────
+        raw_bldgs:   list[tuple[Polygon, float]] = []  # (poly, height_mm)
+        raw_roads:   list[Polygon]               = []
+        raw_water:   list[Polygon]               = []
 
         for way in ways:
             tags = way.get('tags', {})
             pts  = way_pts(way)
 
+            # Buildings
             if tags.get('building') not in (None, 'no') and len(pts) >= 3:
-                try:
-                    p = make_valid(Polygon(pts))
-                    if not p.is_empty and p.area > 0.2:
-                        bldg_shapes.append(p)
-                except Exception:
-                    pass
+                poly = _make_poly(pts)
+                if poly:
+                    if topology:
+                        levels = float(tags.get('building:levels', 2))
+                        h = float(tags.get('building:height', levels * 3.2))
+                        h = max(h / 40.0 * bldg_h, MIN_BLDG_H)
+                    else:
+                        h = bldg_h
+                    raw_bldgs.append((poly, h))
                 continue
 
+            # Roads
             hw = tags.get('highway')
             if hw in ROAD_WIDTH_MM and len(pts) >= 2:
-                try:
-                    from shapely.geometry import LineString
-                    line = LineString(pts)
-                    buf  = make_valid(line.buffer(ROAD_WIDTH_MM[hw] / 2, cap_style=2, join_style=2))
-                    road_shapes.append((buf, ROAD_H))
-                except Exception:
-                    pass
+                poly = _buffer_line(pts, ROAD_WIDTH_MM[hw])
+                if poly:
+                    raw_roads.append(poly)
                 continue
 
+            # Water polygons
             if (tags.get('natural') == 'water' or
                     tags.get('landuse') in WATER_POLY_TAGS) and len(pts) >= 3:
-                try:
-                    p = make_valid(Polygon(pts))
-                    if not p.is_empty and p.area > 0.5:
-                        water_shapes.append(p)
-                except Exception:
-                    pass
+                poly = _make_poly(pts, buffer=WATER_EXPAND)
+                if poly:
+                    raw_water.append(poly)
                 continue
 
+            # Waterways
             ww = tags.get('waterway')
             if ww in WATERWAY_WIDTH_MM and len(pts) >= 2:
-                try:
-                    from shapely.geometry import LineString
-                    line = LineString(pts)
-                    buf  = make_valid(line.buffer(WATERWAY_WIDTH_MM[ww] / 2, cap_style=2))
-                    wway_shapes.append((buf, 0))
-                except Exception:
-                    pass
+                # Expand waterways by extra amount so thin streams are printable
+                poly = _buffer_line(pts, WATERWAY_WIDTH_MM[ww] + WATER_EXPAND)
+                if poly:
+                    raw_water.append(poly)
 
-        # Merge all water shapes
-        all_water_polys = water_shapes + [s for s, _ in wway_shapes]
-        water_union = unary_union(all_water_polys) if all_water_polys else Polygon()
-        bldg_union  = unary_union(bldg_shapes)     if bldg_shapes     else Polygon()
-        road_union  = unary_union([s for s, _ in road_shapes]) if road_shapes else Polygon()
+        # ── 2. Simplify & merge buildings ──────────────────────────────────────
+        # Simplify individual outlines first
+        bldg_polys = []
+        bldg_heights = []
+        for poly, h in raw_bldgs:
+            s = poly.simplify(0.4, preserve_topology=True)
+            s = make_valid(s)
+            for p in _geom_parts(s):
+                if p.area > 0.1:
+                    bldg_polys.append(p)
+                    bldg_heights.append(h)
 
-        # ── Buildings piece ───────────────────────────────────────────────────
-        bldg_meshes: list[trimesh.Trimesh] = []
-
-        # Base plate (all 3 pieces share the same footprint base for alignment)
-        bldg_meshes.append(_box_mesh(plate_w, plate_h, base_mm, [plate_w/2, plate_h/2, base_mm/2]))
-
-        if topology and elev_grid is not None:
-            # Buildings placed at their terrain elevation
-            for way in ways:
-                tags = way.get('tags', {})
-                if tags.get('building') in (None, 'no'):
-                    continue
-                pts = way_pts(way)
-                if len(pts) < 3:
-                    continue
-                # Estimate building ground elevation from centroid
-                cx_b = sum(p[0] for p in pts) / len(pts)
-                cy_b = sum(p[1] for p in pts) / len(pts)
-                ground_elev = _interp_elevation(elev_grid, cx_b, cy_b, plate_w, plate_h)
-                levels = float(tags.get('building:levels', 2))
-                raw_h  = float(tags.get('building:height', levels * 3.2))
-                extrude = min(max(raw_h / 40.0 * BLDG_H, 0.5), BLDG_H)
-                m = _extrude_poly(pts, base_mm + ground_elev + extrude, base_mm)
-                if m: bldg_meshes.append(m)
+        # Close gaps < GAP_CLOSE_MM between buildings
+        if bldg_polys:
+            half = GAP_CLOSE_MM / 2
+            expanded = [p.buffer(half, join_style=2) for p in bldg_polys]
+            merged = make_valid(unary_union(expanded))
+            # Shrink back slightly less than we expanded so merges stick
+            merged = merged.buffer(-half * 0.85, join_style=2)
+            merged = make_valid(merged)
+            bldg_union = merged
         else:
-            # Flat: all buildings same height
-            for way in ways:
-                tags = way.get('tags', {})
-                if tags.get('building') in (None, 'no'):
-                    continue
-                pts = way_pts(way)
-                m = _extrude_poly(pts, BLDG_H, bldg_z)
-                if m: bldg_meshes.append(m)
+            bldg_union = Polygon()
 
-        # Roads (sit on top of land surface)
-        for poly, rh in road_shapes + wway_shapes:
-            polys = list(poly.geoms) if isinstance(poly, MultiPolygon) else [poly]
-            for p in polys:
-                p = make_valid(p)
-                if p.is_empty:
-                    continue
-                pts = list(zip(*p.exterior.coords.xy))
-                m = _extrude_poly(pts, ROAD_H, land_z + LAND_H)
-                if m: bldg_meshes.append(m)
+        road_union  = make_valid(unary_union(raw_roads))  if raw_roads  else Polygon()
+        water_union = make_valid(unary_union(raw_water))  if raw_water  else Polygon()
 
-        # ── Land piece ────────────────────────────────────────────────────────
-        land_meshes: list[trimesh.Trimesh] = []
-        land_meshes.append(_box_mesh(plate_w, plate_h, base_mm, [plate_w/2, plate_h/2, base_mm/2]))
+        # Urban structures (buildings + roads) combined for cutout purposes
+        urban_union = make_valid(bldg_union.union(road_union)) if not road_union.is_empty else bldg_union
 
-        full_rect = shapely_box(0, 0, plate_w, plate_h)
-        cutouts   = bldg_union
-        if not water_union.is_empty:
-            cutouts = cutouts.union(water_union) if not cutouts.is_empty else water_union
-
-        if topology and elev_grid is not None:
-            # Terrain mesh (variable height)
-            terrain = _build_terrain_mesh(elev_grid, plate_w, plate_h, base_mm, LAND_H)
-            land_meshes.append(terrain)
-        else:
-            # Flat slab minus cutouts
-            if cutouts.is_empty:
-                land_piece = full_rect
-            else:
-                land_piece = make_valid(full_rect.difference(cutouts))
-
-            for poly in (_geom_parts(land_piece)):
-                pts = list(zip(*poly.exterior.coords.xy))
-                holes = [list(zip(*i.coords.xy)) for i in poly.interiors]
-                m = _extrude_poly_with_holes(pts, holes, LAND_H, land_z)
-                if m: land_meshes.append(m)
-
-        # ── Water piece ───────────────────────────────────────────────────────
-        water_meshes: list[trimesh.Trimesh] = []
-        water_meshes.append(_box_mesh(plate_w, plate_h, base_mm, [plate_w/2, plate_h/2, base_mm/2]))
-
-        for poly in _geom_parts(water_union):
-            pts = list(zip(*poly.exterior.coords.xy))
-            m = _extrude_poly(pts, WATER_H, water_z)
-            if m: water_meshes.append(m)
-
+        # ── 3. Build three pieces ──────────────────────────────────────────────
         return {
-            'buildings': _export(bldg_meshes),
-            'land':      _export(land_meshes),
-            'water':     _export(water_meshes),
+            'buildings': _export(self._buildings_piece(
+                bldg_polys, bldg_heights, raw_roads, bldg_h, topology
+            )),
+            'water':  _export(self._water_piece(
+                water_union, urban_union, plate_w, plate_h, bldg_h
+            )),
+            'land':   _export(self._land_piece(
+                urban_union, water_union, plate_w, plate_h,
+                bldg_h, topology, elev_grid
+            )),
         }
 
+    # ── Buildings piece ────────────────────────────────────────────────────────
 
-# ── Geometry helpers ──────────────────────────────────────────────────────────
+    def _buildings_piece(
+        self, bldg_polys, bldg_heights, raw_roads, bldg_h, topology,
+    ) -> list[trimesh.Trimesh]:
+        meshes = []
 
-def _box_mesh(w: float, h: float, d: float, centre: list) -> trimesh.Trimesh:
-    m = trimesh.creation.box([w, h, d])
-    m.apply_translation(centre)
-    return m
+        # Building pillars
+        for poly, h in zip(bldg_polys, bldg_heights):
+            h = max(h, MIN_BLDG_H)
+            for p in _geom_parts(poly):
+                m = _extrude(p, h)
+                if m: meshes.append(m)
 
-def _extrude_poly(pts, height, z_base) -> trimesh.Trimesh | None:
-    if height <= 0 or len(pts) < 3:
-        return None
+        # Road pillars — same height as uniform bldg_h (structural)
+        for poly in raw_roads:
+            for p in _geom_parts(make_valid(poly)):
+                m = _extrude(p, bldg_h)
+                if m: meshes.append(m)
+
+        return meshes
+
+    # ── Water piece ────────────────────────────────────────────────────────────
+
+    def _water_piece(
+        self, water_union, urban_union,
+        plate_w, plate_h, bldg_h,
+    ) -> list[trimesh.Trimesh]:
+        if water_union.is_empty:
+            return []
+
+        # Clip water to plate boundary
+        plate_rect = shapely_box(0, 0, plate_w, plate_h)
+        water = make_valid(water_union.intersection(plate_rect))
+
+        # Punch holes where buildings/roads are (pillars slot through)
+        if not urban_union.is_empty:
+            water = make_valid(water.difference(urban_union))
+
+        meshes = []
+        for p in _geom_parts(water):
+            m = _extrude(p, WATER_H)
+            if m: meshes.append(m)
+        return meshes
+
+    # ── Land piece (locking lid) ───────────────────────────────────────────────
+
+    def _land_piece(
+        self, urban_union, water_union,
+        plate_w, plate_h, bldg_h,
+        topology, elev_grid,
+    ) -> list[trimesh.Trimesh]:
+        plate_rect = shapely_box(0, 0, plate_w, plate_h)
+
+        # Land = everything not urban and not water
+        land = plate_rect
+        if not urban_union.is_empty:
+            land = make_valid(land.difference(urban_union))
+        if not water_union.is_empty:
+            land = make_valid(land.difference(water_union.intersection(plate_rect)))
+
+        land_thickness = bldg_h - WATER_H
+
+        if not topology or elev_grid is None:
+            # Flat lid: extrude from WATER_H to BLDG_H
+            meshes = []
+            for p in _geom_parts(land):
+                m = _extrude(p, land_thickness, z_base=WATER_H)
+                if m: meshes.append(m)
+            return meshes
+        else:
+            # Topology lid: terrain top surface, flat bottom at WATER_H
+            return self._terrain_lid(land, elev_grid, plate_w, plate_h,
+                                     WATER_H, bldg_h)
+
+    def _terrain_lid(
+        self, land_shape, elev_grid,
+        plate_w, plate_h, z_bottom, z_max,
+    ) -> list[trimesh.Trimesh]:
+        """Build a terrain surface lid for the land piece."""
+        terrain = _build_terrain_mesh(elev_grid, plate_w, plate_h, z_bottom, z_max - z_bottom)
+        # We return just the terrain — in practice a slicer will close the bottom
+        # TODO: add side walls and bottom face for a fully watertight solid
+        return [terrain] if terrain else []
+
+
+# ── Geometry primitives ───────────────────────────────────────────────────────
+
+def _make_poly(pts, buffer=0.0) -> Polygon | None:
     try:
-        poly = make_valid(Polygon(pts))
-        if poly.is_empty or poly.area < 0.1:
+        p = make_valid(Polygon(pts))
+        if p.is_empty or p.area < 0.05:
             return None
-        m = trimesh.creation.extrude_polygon(poly, height)
-        m.apply_translation([0, 0, z_base])
-        return m
+        if buffer:
+            p = p.buffer(buffer)
+            p = make_valid(p)
+        return p if not p.is_empty else None
     except Exception:
         return None
 
-def _extrude_poly_with_holes(outer_pts, holes, height, z_base) -> trimesh.Trimesh | None:
-    if height <= 0 or len(outer_pts) < 3:
-        return None
+def _buffer_line(pts, width) -> Polygon | None:
     try:
-        outer = Polygon(outer_pts)
-        for h in holes:
-            if len(h) >= 3:
-                try:
-                    outer = outer.difference(Polygon(h))
-                except Exception:
-                    pass
-        outer = make_valid(outer)
-        if outer.is_empty or outer.area < 0.1:
-            return None
-        m = trimesh.creation.extrude_polygon(outer, height)
-        m.apply_translation([0, 0, z_base])
-        return m
+        line = LineString(pts)
+        p = make_valid(line.buffer(width / 2, cap_style=2, join_style=2))
+        return p if not p.is_empty else None
     except Exception:
         return None
 
@@ -289,10 +313,21 @@ def _geom_parts(geom) -> list[Polygon]:
     if geom is None or geom.is_empty:
         return []
     if isinstance(geom, MultiPolygon):
-        return [p for p in geom.geoms if not p.is_empty]
-    if isinstance(geom, Polygon):
+        return [p for p in geom.geoms if not p.is_empty and p.area > 0.05]
+    if isinstance(geom, Polygon) and not geom.is_empty and geom.area > 0.05:
         return [geom]
     return []
+
+def _extrude(poly: Polygon, height: float, z_base: float = 0.0) -> trimesh.Trimesh | None:
+    if height <= 0.01 or poly.is_empty or poly.area < 0.05:
+        return None
+    try:
+        m = trimesh.creation.extrude_polygon(poly, height)
+        if z_base:
+            m.apply_translation([0, 0, z_base])
+        return m
+    except Exception:
+        return None
 
 def _export(meshes: list) -> BytesIO:
     meshes = [m for m in meshes if m is not None]
@@ -314,12 +349,15 @@ def _export(meshes: list) -> BytesIO:
 
 # ── Elevation (SRTM via OpenTopoData) ─────────────────────────────────────────
 
-def _fetch_elevation(west, south, east, north, nx=10, ny=10) -> list[list[float]] | None:
-    """Fetch SRTM90m elevation for a grid. Returns [ny][nx] or None on failure."""
+def _fetch_elevation(
+    west, south, east, north, nx=10, ny=10,
+) -> list[list[float]] | None:
     lons = [west  + (east  - west)  * i / (nx - 1) for i in range(nx)]
     lats = [south + (north - south) * j / (ny - 1) for j in range(ny)]
-    points = [(lat, lon) for lat in lats for lon in lons]
-    locs   = '|'.join(f'{lat:.5f},{lon:.5f}' for lat, lon in points)
+    locs = '|'.join(
+        f'{lat:.5f},{lon:.5f}'
+        for lat in lats for lon in lons
+    )
     try:
         r = requests.get(
             f'https://api.opentopodata.org/v1/srtm90m?locations={locs}',
@@ -331,46 +369,32 @@ def _fetch_elevation(west, south, east, north, nx=10, ny=10) -> list[list[float]
             return None
         mn, mx = min(elevs), max(elevs)
         rng = mx - mn or 1.0
-        # Normalise to 0–1
         norm = [(e - mn) / rng for e in elevs]
-        grid = [[norm[j * nx + i] for i in range(nx)] for j in range(ny)]
-        return grid
+        return [[norm[j * nx + i] for i in range(nx)] for j in range(ny)]
     except Exception:
         return None
 
-def _interp_elevation(grid: list[list[float]], x, y, plate_w, plate_h) -> float:
-    """Bilinear interpolation of elevation grid at (x, y) in mm."""
-    ny, nx = len(grid), len(grid[0])
-    fx = min(max(x / plate_w * (nx - 1), 0), nx - 1)
-    fy = min(max(y / plate_h * (ny - 1), 0), ny - 1)
-    ix, iy = int(fx), int(fy)
-    dx, dy = fx - ix, fy - iy
-    ix1, iy1 = min(ix + 1, nx - 1), min(iy + 1, ny - 1)
-    v = (grid[iy][ix]   * (1-dx) * (1-dy) +
-         grid[iy][ix1]  *    dx  * (1-dy) +
-         grid[iy1][ix]  * (1-dx) *    dy  +
-         grid[iy1][ix1] *    dx  *    dy)
-    return v  # 0–1 normalised
-
 def _build_terrain_mesh(
-    grid: list[list[float]], plate_w, plate_h, base_mm, max_terrain_mm,
-) -> trimesh.Trimesh:
-    """Build a solid terrain block from normalised elevation grid."""
+    grid, plate_w, plate_h, z_base, z_range,
+) -> trimesh.Trimesh | None:
     ny, nx = len(grid), len(grid[0])
-    top_verts = []
+    verts = []
     for j in range(ny):
         for i in range(nx):
             x = i / (nx - 1) * plate_w
             y = j / (ny - 1) * plate_h
-            z = base_mm + grid[j][i] * max_terrain_mm
-            top_verts.append([x, y, z])
-
+            z = z_base + grid[j][i] * z_range
+            verts.append([x, y, z])
     faces = []
     for j in range(ny - 1):
         for i in range(nx - 1):
             v0, v1 = j*nx+i, j*nx+(i+1)
             v2, v3 = (j+1)*nx+i, (j+1)*nx+(i+1)
             faces += [[v0,v1,v2],[v1,v3,v2]]
-
-    mesh = trimesh.Trimesh(vertices=np.array(top_verts, dtype=float), faces=np.array(faces))
-    return mesh
+    try:
+        return trimesh.Trimesh(
+            vertices=np.array(verts, dtype=float),
+            faces=np.array(faces),
+        )
+    except Exception:
+        return None
