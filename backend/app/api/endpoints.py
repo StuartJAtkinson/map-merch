@@ -1,12 +1,10 @@
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
-import os
 
-OUTPUT_DIR = Path(__file__).resolve().parents[2] / "output"
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from ..core.config import get_settings
 from ..models.schemas import (
@@ -15,12 +13,13 @@ from ..models.schemas import (
     SVGGenerationRequest,
     STLGenerationRequest,
     LicenseCheckRequest,
-    DesignProjectCreate,
 )
 from ..services.osm_fetcher import OSMFetcher
 from ..services.svg_generator import SVGGenerator
 from ..services.stl_generator import STLGenerator
 from ..services.license_tracker import LicenseTracker
+
+OUTPUT_DIR = Path(__file__).resolve().parents[2] / "output"
 
 
 settings = get_settings()

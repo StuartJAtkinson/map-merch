@@ -226,24 +226,28 @@ class STLGenerator:
         # Outer collar walls — frame that water and lid sit inside
         collar_ring = make_valid(outer_shape.difference(plate_shape))
         m = _extrude(collar_ring, bldg_h)
-        if m: meshes.append(m)
+        if m:
+            meshes.append(m)
 
         if topology:
             # Individual buildings at proportional heights
             for poly, h in zip(bldg_polys, bldg_heights):
                 for p in _geom_parts(poly):
                     m = _extrude(p, h)
-                    if m: meshes.append(m)
+                    if m:
+                        meshes.append(m)
             for poly in raw_roads:
                 for p in _geom_parts(make_valid(poly)):
                     m = _extrude(p, bldg_h)
-                    if m: meshes.append(m)
+                    if m:
+                        meshes.append(m)
         else:
             # Flat mode: extrude the fully merged urban union
             # → terrace rows merge into single cuboids, no hairline gaps
             for p in _geom_parts(urban_union):
                 m = _extrude(p, bldg_h)
-                if m: meshes.append(m)
+                if m:
+                    meshes.append(m)
 
         return meshes
 
@@ -264,7 +268,8 @@ class STLGenerator:
         meshes = []
         for p in _geom_parts(water):
             m = _extrude(p, thickness, z_base=water_start)
-            if m: meshes.append(m)
+            if m:
+                meshes.append(m)
         return meshes
 
     # ── Land piece (locking lid) ───────────────────────────────────────────────
@@ -297,7 +302,8 @@ class STLGenerator:
             meshes = []
             for p in _geom_parts(lid_shape):
                 m = _extrude(p, thickness, z_base=land_start)
-                if m: meshes.append(m)
+                if m:
+                    meshes.append(m)
             return meshes
         else:
             bounds = plate_shape.bounds  # (minx, miny, maxx, maxy)

@@ -1,7 +1,4 @@
 from datetime import datetime
-from typing import Optional
-from shapely.geometry import shape
-import json
 
 
 class LicenseTracker:
