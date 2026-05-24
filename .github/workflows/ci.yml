@@ -229,6 +229,7 @@ jobs:
             --memory=256Mi
             --cpu=1
             --concurrency=1000
+            --port=80
 
       - name: Print URLs
         run: |
