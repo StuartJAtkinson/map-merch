@@ -5,7 +5,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # Database
-    database_url: str = "postgresql://heart_user:heart_password@localhost:5432/heart_on_a_sleeve"
+    database_url: str = "sqlite+aiosqlite:///./dev.db"
 
     # WooCommerce
     woocommerce_store_url: str = ""

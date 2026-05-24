@@ -136,16 +136,17 @@ jobs:
 
   # ── Deploy to Cloud Run ───────────────────────────────────────────────────────
   # Dormant until you set GCP_PROJECT_ID in repo Variables (Settings → Secrets and variables → Variables).
-  # One-time GCP setup instructions are in docs/DEPLOY.md (to be created).
+  # One-time GCP setup instructions are in docs/DEPLOY.md.
   #
   # Variables needed (Settings → Variables):
   #   GCP_PROJECT_ID   — your GCP project ID e.g. heart-on-a-sleeve-123456
   #   GCP_REGION       — e.g. europe-west2  (London)
+  #   FRONTEND_URL     — set after first deploy (Cloud Run frontend URL or custom domain)
   #
   # Secrets needed (Settings → Secrets):
   #   GCP_WORKLOAD_IDENTITY_PROVIDER  — projects/NUMBER/locations/global/workloadIdentityPools/...
   #   GCP_SERVICE_ACCOUNT             — hoas-deployer@PROJECT.iam.gserviceaccount.com
-  #   DATABASE_URL                    — postgresql+asyncpg://user:pass@host/db
+  #   DATABASE_URL                    — postgresql+asyncpg://user:pass@/db?host=/cloudsql/PROJECT:REGION:INSTANCE
   #   SECRET_KEY                      — random 64-char string (python -c "import secrets; print(secrets.token_hex(32))")
 
   deploy:
@@ -168,6 +169,7 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Deploy backend
+        id: deploy-backend
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: hoas-backend
@@ -176,6 +178,7 @@ jobs:
           env_vars: |
             DATABASE_URL=${{ secrets.DATABASE_URL }}
             SECRET_KEY=${{ secrets.SECRET_KEY }}
+            CORS_ORIGINS=${{ vars.FRONTEND_URL || '*' }}
           flags: >-
             --allow-unauthenticated
             --min-instances=0
@@ -183,13 +186,17 @@ jobs:
             --memory=512Mi
             --cpu=1
             --concurrency=80
+            --add-cloudsql-instances=${{ vars.GCP_PROJECT_ID }}:${{ env.REGION }}:hoas-db
 
       - name: Deploy frontend
+        id: deploy-frontend
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: hoas-frontend
           region: ${{ env.REGION }}
           image: ghcr.io/${{ github.repository_owner }}/hoas-frontend:${{ github.sha }}
+          env_vars: |
+            BACKEND_URL=${{ steps.deploy-backend.outputs.url }}
           flags: >-
             --allow-unauthenticated
             --min-instances=0
@@ -200,5 +207,5 @@ jobs:
 
       - name: Print URLs
         run: |
-          echo "Backend:  $(gcloud run services describe hoas-backend  --region=$REGION --format='value(status.url)')"
-          echo "Frontend: $(gcloud run services describe hoas-frontend --region=$REGION --format='value(status.url)')"
+          echo "Backend:  ${{ steps.deploy-backend.outputs.url }}"
+          echo "Frontend: ${{ steps.deploy-frontend.outputs.url }}"
