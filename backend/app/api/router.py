@@ -26,7 +26,9 @@ from app import timing_utils
 
 settings = get_settings()
 
-DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
+DATA_DIR = os.environ.get("DATA_DIR") or os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "data")
+)
 
 os.makedirs(os.path.join(DATA_DIR, "svg_output"), exist_ok=True)
 os.makedirs(os.path.join(DATA_DIR, "stl_output"), exist_ok=True)
@@ -46,6 +48,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve generated SVG/STL files at /output/svg_output/... and /output/stl_output/...
+app.mount("/output", StaticFiles(directory=DATA_DIR), name="output")
 
 # Mount CesiumJS frontend only when running outside Docker (source tree present)
 CESIUM_DIR = os.environ.get("CESIUM_DIR") or os.path.abspath(

@@ -941,7 +941,7 @@ function svgInitPicker() {
   el.innerHTML = SVG_COLOUR_DEFS.map((def, i) =>
     `<div class="colour-row"><span class="colour-key-label">${def.label}</span>` +
     `<div class="swatch-row">${def.swatches.map((c, j) =>
-      `<div class="swatch${j===0?' active':''}" style="background:${c}" data-cat="${i}" data-idx="${j}"></div>`
+      `<div class="swatch${j===svgSelIdx[i]?' active':''}" style="background:${c}" data-cat="${i}" data-idx="${j}"></div>`
     ).join('')}</div></div>`
   ).join('');
   el.addEventListener('click', e => {
@@ -994,6 +994,13 @@ async function openSvgView(url: string, text: string, stlResult: any) {
   svg3dBtn.style.display = is3d ? 'block' : 'none';
   if (!is3d) { svgDlBtn.style.borderColor = '#4a9eff'; svgDlBtn.style.color = '#4a9eff'; }
   else        { svgDlBtn.style.borderColor = ''; svgDlBtn.style.color = ''; }
+
+  // Show floating save widget: immediately for 2D, or 3D when data is already present; hide otherwise (waits for STL)
+  const saveFloat = document.getElementById('save-float')!;
+  const saveStatus = document.getElementById('save-status')!;
+  saveStatus.textContent = '';
+  saveFloat.style.display = (!is3d || stlResult) ? '' : 'none';
+
   svgView.style.display = 'flex';
   // Wait two frames so the browser has done a layout pass before measuring clientWidth
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r as FrameRequestCallback)));
@@ -1004,6 +1011,7 @@ async function openSvgView(url: string, text: string, stlResult: any) {
 // ── SVG viewer event listeners ────────────────────────────────────────────────
 document.getElementById('btn-back')!.addEventListener('click', async () => {
   svgView.style.display = 'none';
+  document.getElementById('save-float')!.style.display = 'none';
   const panel = document.getElementById('panel')!;
   panel.style.visibility = 'visible';
   await runReverseTransition();
@@ -1187,7 +1195,7 @@ async function generate(): Promise<void> {
   osmP.then(() => {
     fetchJson('/api/generate/stl', {
       bbox, merch_type: merchType, coaster_shape: coasterShape,
-    }).then((r: any) => { svgCurrentStl = r; }).catch(() => { /* ignore */ });
+    }).then((r: any) => { svgCurrentStl = r; onStlReady(); }).catch(() => { /* ignore */ });
   }).catch(() => { /* osmP already handles its own error */ });
 
   // Fly camera to fit the selection in view — runs in parallel with the OSM fetch.
@@ -1302,8 +1310,8 @@ async function saveProject(): Promise<void> {
   }
   if (!confirmed) return;
   const bbox      = rotSelAabb(confirmed);
-  const nameEl    = document.getElementById('svg-save-name')    as HTMLInputElement;
-  const statusEl  = document.getElementById('svg-save-status')  as HTMLElement;
+  const nameEl    = document.getElementById('save-name')    as HTMLInputElement;
+  const statusEl  = document.getElementById('save-status')  as HTMLElement;
   const name      = nameEl.value.trim() || `${merchType} — ${new Date().toLocaleDateString('en-GB')}`;
   statusEl.textContent = 'Saving…';
   try {
@@ -1346,25 +1354,24 @@ async function saveProject(): Promise<void> {
     if (!resp.ok) throw new Error(`Server ${resp.status}`);
     statusEl.textContent = 'Saved!';
     setTimeout(() => { statusEl.textContent = ''; }, 2500);
+    document.getElementById('designs-fab')!.style.display = '';
   } catch (e: any) {
     statusEl.textContent = `Error: ${e.message}`;
   }
 }
 
-document.getElementById('svg-btn-save')!.addEventListener('click', saveProject);
+document.getElementById('btn-save')!.addEventListener('click', saveProject);
 
 // ---------------------------------------------------------------------------
 // User nav
 // ---------------------------------------------------------------------------
 function updateUserNav(): void {
-  const email   = localStorage.getItem('hoas_email');
-  const navEls  = document.querySelectorAll<HTMLElement>('.user-nav-slot');
+  const email  = localStorage.getItem('hoas_email');
+  const navEls = document.querySelectorAll<HTMLElement>('.user-nav-slot');
   navEls.forEach(el => {
     if (email) {
-      el.innerHTML =
-        `<a href="/dashboard.html" class="btn" style="margin-bottom:4px">⊞ My Designs</a>` +
-        `<button class="btn" id="logout-btn-${el.dataset.slot}">↩ Logout</button>`;
-      el.querySelector('button')?.addEventListener('click', () => {
+      el.innerHTML = `<button class="btn" id="logout-btn-${el.dataset.slot}">↩ Logout</button>`;
+      el.querySelector(`#logout-btn-${el.dataset.slot}`)?.addEventListener('click', () => {
         localStorage.removeItem('hoas_token');
         localStorage.removeItem('hoas_refresh');
         localStorage.removeItem('hoas_email');
@@ -1376,6 +1383,224 @@ function updateUserNav(): void {
   });
 }
 updateUserNav();
+
+async function checkDesignCount(): Promise<void> {
+  const token = localStorage.getItem('hoas_token');
+  if (!token) return;
+  try {
+    const r = await fetch('/api/projects', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!r.ok) return;
+    const projects: any[] = await r.json();
+    if (projects.length > 0) document.getElementById('designs-fab')!.style.display = '';
+  } catch { /* ignore */ }
+}
+checkDesignCount();
+
+document.getElementById('designs-fab')!.addEventListener('click', openDesignsPanel);
+
+// ---------------------------------------------------------------------------
+// STL ready — reveal save section for 3D designs
+// ---------------------------------------------------------------------------
+function onStlReady(): void {
+  if (!['coaster','placemat','3d_print'].includes(merchType)) return;
+  if (svgView.style.display === 'none') return;
+  const saveFloat = document.getElementById('save-float')!;
+  saveFloat.style.display = '';
+  const statusEl = document.getElementById('save-status')!;
+  statusEl.textContent = '3D model ready — save your design';
+  setTimeout(() => { if (statusEl.textContent.startsWith('3D model')) statusEl.textContent = ''; }, 3500);
+}
+
+// ---------------------------------------------------------------------------
+// My Designs floating panel
+// ---------------------------------------------------------------------------
+let _designsCache: any[] = [];
+
+const designsBackdrop = document.getElementById('designs-backdrop')!;
+const designsPanel    = document.getElementById('designs-panel')!;
+designsBackdrop.addEventListener('click', closeDesignsPanel);
+document.getElementById('designs-close')!.addEventListener('click', closeDesignsPanel);
+
+function openDesignsPanel(): void {
+  const token = localStorage.getItem('hoas_token');
+  if (!token) { window.location.href = '/login.html?returnTo=' + encodeURIComponent(window.location.href); return; }
+  document.getElementById('designs-email')!.textContent = localStorage.getItem('hoas_email') || '';
+  designsBackdrop.classList.add('open');
+  designsPanel.classList.add('open');
+  renderDesigns();
+}
+
+function closeDesignsPanel(): void {
+  designsBackdrop.classList.remove('open');
+  designsPanel.classList.remove('open');
+}
+
+async function renderDesigns(): Promise<void> {
+  const token     = localStorage.getItem('hoas_token')!;
+  const contentEl = document.getElementById('designs-content')!;
+  contentEl.innerHTML = '<div class="designs-loading">Loading…</div>';
+
+  try {
+    const resp = await fetch('/api/projects', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (resp.status === 401) {
+      localStorage.removeItem('hoas_token');
+      window.location.href = '/login.html?returnTo=' + encodeURIComponent(window.location.href);
+      return;
+    }
+    if (!resp.ok) throw new Error(`Server ${resp.status}`);
+
+    const projects: any[] = await resp.json();
+    _designsCache = projects;
+
+    if (!projects.length) {
+      contentEl.innerHTML = '<div class="designs-empty">No saved designs yet.</div>';
+      return;
+    }
+
+    const MERCH_EMOJI: Record<string, string> = {
+      tshirt: '👕', mug: '☕', tote: '👜', coaster: '⬜', placemat: '🟫', '3d_print': '⛰',
+    };
+
+    function esc(s: string): string {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    contentEl.innerHTML = `<div class="designs-grid">${projects.map(p => {
+      const date  = new Date(p.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+      const emoji = MERCH_EMOJI[p.merch_type] || '🗺';
+      const thumb = p.svg_url
+        ? `<img src="${p.svg_url}" alt="" loading="lazy">`
+        : `<span class="no-thumb">${emoji}</span>`;
+      return `
+        <div class="design-card">
+          <div class="design-thumb">${thumb}</div>
+          <div class="design-name">${esc(p.name)}</div>
+          <div class="design-meta">${emoji} ${p.merch_type}<br>${date}</div>
+          <div class="design-actions">
+            <button class="btn design-load-btn" data-id="${p.id}">↩ Load</button>
+            <button class="btn-danger design-del-btn"  data-id="${p.id}">✕</button>
+          </div>
+        </div>`;
+    }).join('')}</div>`;
+
+    contentEl.querySelectorAll<HTMLElement>('.design-load-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const project = _designsCache.find(p => p.id === +btn.dataset.id!);
+        if (project) loadDesign(project);
+      });
+    });
+    contentEl.querySelectorAll<HTMLButtonElement>('.design-del-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this design?')) return;
+        btn.disabled = true;
+        const id = +btn.dataset.id!;
+        const r = await fetch(`/api/projects/${id}`, {
+          method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (r.ok || r.status === 204) {
+          _designsCache = _designsCache.filter(p => p.id !== id);
+          btn.closest('.design-card')?.remove();
+          if (!contentEl.querySelector('.design-card'))
+            contentEl.innerHTML = '<div class="designs-empty">No saved designs yet.</div>';
+        } else { btn.disabled = false; }
+      });
+    });
+
+  } catch (e: any) {
+    contentEl.innerHTML = `<div class="designs-loading">Error: ${e.message}</div>`;
+  }
+}
+
+function restorePalette(overrides: Record<string, string>): void {
+  SVG_COLOUR_DEFS.forEach((def, i) => {
+    const saved = overrides[def.key];
+    if (!saved) return;
+    const idx = def.swatches.findIndex(s => s.toLowerCase() === saved.toLowerCase());
+    if (idx !== -1) svgSelIdx[i] = idx;
+  });
+}
+
+async function loadDesign(project: any): Promise<void> {
+  closeDesignsPanel();
+
+  // Hide SVG view if open; clear overlay
+  svgView.style.display = 'none';
+  const ov = document.getElementById('transition-overlay') as HTMLCanvasElement;
+  ov.style.display = 'none'; ov.style.opacity = '1';
+
+  // Restore merch type
+  const newMerch = project.merch_type as string;
+  document.querySelectorAll<HTMLElement>('.merch-btn').forEach(el =>
+    el.classList.toggle('active', el.dataset.type === newMerch));
+  merchType = newMerch;
+
+  // Restore coaster shape
+  if (newMerch === 'coaster' && project.coaster_shape) {
+    const idx = COASTER_SHAPES.indexOf(project.coaster_shape as CoasterShape);
+    if (idx !== -1) {
+      coasterShapeIdx = idx; coasterShape = COASTER_SHAPES[idx];
+      document.getElementById('coaster-icon')!.textContent       = COASTER_ICONS[coasterShape];
+      document.getElementById('coaster-shape-label')!.textContent = COASTER_LABELS[coasterShape];
+    }
+  }
+
+  // Restore palette and include flags
+  if (project.palette_overrides) restorePalette(project.palette_overrides);
+  svgInclLabels    = project.include_labels    ?? true;
+  svgInclBuildings = project.include_buildings ?? true;
+  document.getElementById('svg-tog-labels')!   .classList.toggle('on', svgInclLabels);
+  document.getElementById('svg-tog-buildings')!.classList.toggle('on', svgInclBuildings);
+
+  // Restore bbox selection on map
+  const bbox: BBox = project.bbox;
+  const sel = bboxToRotSel(bbox);
+  if (editState === 'editing') exitEditing();
+  else if (editState === 'drawing') { clearHandlers(); editState = 'idle'; }
+  enterEditing(sel);
+
+  // Fly camera to the area
+  await flyTobbox(bbox.west, bbox.south, bbox.east, bbox.north);
+
+  // Restore STL references
+  svgCurrentStl = project.stl_buildings_url
+    ? { stl_buildings_url: project.stl_buildings_url, stl_land_url: project.stl_land_url, stl_water_url: project.stl_water_url }
+    : null;
+
+  if (!project.svg_url) {
+    // No SVG — just leave the map with the selection restored
+    const panel = document.getElementById('panel')!;
+    panel.style.visibility = 'visible';
+    return;
+  }
+
+  // Fetch SVG text from the saved server URL so re-colour controls work
+  let svgText = '';
+  try {
+    const r = await fetch(project.svg_url);
+    svgText  = await r.text();
+  } catch { /* proceed — SVG view still works with empty text as image */ }
+
+  _cachedSvgResult = svgText ? { svg_url: project.svg_url, svgText } : null;
+  _cachedOsmData   = null; // cleared; background re-fetch below re-enables colour pickers
+
+  const panel = document.getElementById('panel')!;
+  panel.style.visibility = 'hidden';
+
+  genBtn.disabled = false;
+  (document.getElementById('btn-text') as HTMLElement).textContent = 'View Design →';
+  genBtn.onclick = _cachedSvgResult ? showCachedSvg : generate;
+
+  await openSvgView(project.svg_url, svgText, svgCurrentStl);
+
+  // Background OSM re-fetch to enable colour picker re-generation
+  const b = rotSelAabb(sel);
+  fetch(`/api/osm/features?${new URLSearchParams({
+    west: String(b.west), south: String(b.south), east: String(b.east), north: String(b.north),
+  })}`)
+    .then(r => r.json())
+    .then((data: { elements?: Record<string, unknown>[] }) => { _cachedOsmData = data; })
+    .catch(() => {});
+}
 
 // ---------------------------------------------------------------------------
 // Wire up

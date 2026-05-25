@@ -277,6 +277,36 @@ const bboxClip = [
 ];
 osmMats.forEach(m => { m.clippingPlanes = bboxClip; });
 
+// ── SVG ground texture — applied after entry animation for all merch types ───
+let _groundTexApplied = false;
+async function applyGroundTexture() {
+  if (!svgUrl || _groundTexApplied) return;
+  _groundTexApplied = true;
+  try {
+    const tex = await new Promise((res, rej) => {
+      const img = new Image();
+      img.onload = () => {
+        const SIZE = 2048;
+        const aspect = sceneW / sceneD;
+        const cw = aspect >= 1 ? SIZE : Math.round(SIZE * aspect);
+        const ch = aspect >= 1 ? Math.round(SIZE / aspect) : SIZE;
+        const cv = document.createElement('canvas');
+        cv.width = cw; cv.height = ch;
+        cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+        res(new THREE.CanvasTexture(cv));
+      };
+      img.onerror = () => { _groundTexApplied = false; rej(new Error('img load')); };
+      img.src = svgUrl;
+    });
+    tex.colorSpace = THREE.SRGBColorSpace;
+    matGround.map = tex;
+    matGround.color.set(0xffffff);
+    matGround.needsUpdate = true;
+  } catch (e) {
+    console.warn('SVG ground texture failed:', e);
+  }
+}
+
 // ── OSM group (all live-render meshes live here) ──────────────────────────────
 const osmGroup = new THREE.Group();
 scene.add(osmGroup);
@@ -317,6 +347,7 @@ function tickEntry(now) {
     scene.background.set(BG);
     if (scene.fog) scene.fog.color.set(BG);
     document.getElementById('loading').style.display = 'none';
+    if (svgUrl) applyGroundTexture();
     // For fabric/transfer types, auto-show the SVG base layer after the entry animation
     if (!is3dPrint && svgUrl && !showingPreview) {
       const btn = document.getElementById('btn-mode');

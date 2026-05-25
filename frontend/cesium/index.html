@@ -137,6 +137,27 @@
         #svg-scale-display { font-size: 11px; color: var(--text-mid); margin-bottom: 2px; }
         #svg-size-display  { font-size: 10px; color: var(--text-muted); margin-bottom: 10px; }
 
+        /* Floating save widget */
+        #save-float {
+            position: fixed; bottom: 24px; right: 24px;
+            width: 210px; z-index: 9999;
+            background: var(--bg-panel); border: 1px solid var(--border-panel);
+            border-radius: var(--radius-panel); padding: 12px 14px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+        #save-float .btn { margin-top: 4px; }
+        #save-status { font-size: 11px; color: var(--text-mid); min-height: 14px; margin-top: 4px; }
+
+        /* My Designs FAB */
+        #designs-fab {
+            position: fixed; top: 20px; right: 20px; z-index: 9999;
+            background: var(--bg-item); border: 1.5px solid var(--border-item);
+            color: var(--text-mid); border-radius: var(--radius-btn);
+            padding: 8px 14px; font-size: 13px; font-family: inherit;
+            cursor: pointer; transition: all 0.12s;
+        }
+        #designs-fab:hover { border-color: var(--accent); color: var(--accent); }
+
         /* Save + user nav */
         .save-input {
             width: 100%; box-sizing: border-box; margin-bottom: 6px;
@@ -147,7 +168,78 @@
         .save-input:focus { border-color: var(--accent); }
         .save-input::placeholder { color: var(--text-dim); }
         #svg-save-status { font-size: 11px; color: var(--text-mid); min-height: 14px; margin-top: 4px; }
+        #svg-save-pending-hint { font-size: 11px; color: var(--text-dim); padding: 8px 0 4px; }
         .user-nav-slot { display: flex; flex-direction: column; gap: 4px; }
+
+        /* ── My Designs floating panel ── */
+        #designs-backdrop {
+            position: fixed; inset: 0; z-index: 10001;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        #designs-backdrop.open { opacity: 1; pointer-events: auto; }
+        #designs-panel {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -47%) scale(0.97);
+            width: min(680px, calc(100vw - 32px));
+            max-height: calc(100vh - 80px);
+            z-index: 10002; display: flex; flex-direction: column;
+            overflow: hidden;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.22s ease, transform 0.22s cubic-bezier(.2,.8,.4,1);
+        }
+        #designs-panel.open {
+            opacity: 1; pointer-events: auto;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .designs-hdr {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 18px 10px; flex-shrink: 0;
+        }
+        .designs-hdr span { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+        .designs-hdr-email { font-size: 11px; color: var(--text-dim); padding: 0 18px 10px; flex-shrink: 0; }
+        #designs-close {
+            background: transparent; border: none; cursor: pointer;
+            color: var(--text-dim); font-size: 22px; line-height: 1;
+            padding: 0 4px; border-radius: 4px; font-family: inherit;
+            transition: color 0.1s;
+        }
+        #designs-close:hover { color: var(--text-high); }
+        #designs-content { overflow-y: auto; padding: 0 18px 18px; }
+        .designs-loading, .designs-empty {
+            font-size: 13px; color: var(--text-dim); padding: 32px 0; text-align: center;
+        }
+        .designs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+        }
+        .design-card {
+            background: var(--bg-item); border: 1px solid var(--border-dim);
+            border-radius: 8px; padding: 10px;
+            display: flex; flex-direction: column; gap: 6px;
+            transition: border-color 0.12s;
+        }
+        .design-card:hover { border-color: var(--border-item); }
+        .design-thumb {
+            width: 100%; aspect-ratio: 1; background: var(--bg-page);
+            border-radius: 5px; overflow: hidden;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .design-thumb img { width: 100%; height: 100%; object-fit: contain; }
+        .design-thumb .no-thumb { font-size: 28px; }
+        .design-name { font-size: 12px; color: var(--text-high); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .design-meta { font-size: 10px; color: var(--text-dim); line-height: 1.5; }
+        .design-actions { display: flex; gap: 5px; margin-top: 2px; }
+        .design-actions .btn { flex: 1; padding: 5px 3px; font-size: 11px; margin-top: 0; }
+        .btn-danger {
+            flex: 1; padding: 5px 3px; font-size: 11px;
+            background: transparent; border: 1px solid var(--border-dim);
+            color: #e06060; border-radius: var(--radius-btn);
+            font-family: inherit; cursor: pointer; transition: all 0.12s;
+        }
+        .btn-danger:hover { border-color: #e06060; background: rgba(224,96,96,0.08); }
     </style>
 </head>
 <body>
@@ -232,17 +324,32 @@
         <a   class="btn" id="svg-btn-dl" download="design.svg">↓ Download SVG</a>
         <button class="btn" id="svg-btn-3d">◉ View 3D →</button>
         <div class="divider"></div>
-        <input type="text" class="save-input" id="svg-save-name" placeholder="Design name…">
-        <button class="btn" id="svg-btn-save">💾 Save design</button>
-        <div id="svg-save-status"></div>
-        <div class="divider"></div>
-        <div class="user-nav-slot" data-slot="svg"></div>
-        <div class="divider"></div>
         <div class="hint">Scroll — zoom<br>Left drag — pan</div>
     </div>
     <div id="svg-vp">
         <div id="svg-wrap"></div>
     </div>
+</div>
+
+<!-- Floating save widget -->
+<div id="save-float" style="display:none">
+  <input type="text" class="save-input" id="save-name" placeholder="Design name…">
+  <button class="btn" id="btn-save">💾 Save design</button>
+  <div id="save-status"></div>
+</div>
+
+<!-- My Designs FAB -->
+<button id="designs-fab" style="display:none">⊞ My Designs</button>
+
+<!-- My Designs floating panel -->
+<div id="designs-backdrop"></div>
+<div id="designs-panel" class="panel">
+  <div class="designs-hdr">
+    <span>My Designs</span>
+    <button id="designs-close">×</button>
+  </div>
+  <div class="designs-hdr-email" id="designs-email"></div>
+  <div id="designs-content"><div class="designs-loading">Loading…</div></div>
 </div>
 
 <script type="module" src="/src/app.ts"></script>
