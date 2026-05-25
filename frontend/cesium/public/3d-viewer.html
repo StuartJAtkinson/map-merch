@@ -5,19 +5,22 @@
   <title>Heart on a Sleeve — 3D Map</title>
   <link rel="stylesheet" href="/app.css">
   <style>
-    /* 3D viewer specific */
-    canvas { display: block; }
-    #overlay {
-      position: absolute; top: 20px; left: 20px;
-      min-width: 185px; z-index: 10;
+    /* 3D viewer layout — sidebar left, canvas right */
+    body { display: flex; flex-direction: row; height: 100vh; overflow: hidden; }
+    #panel3d {
+      width: 272px; flex-shrink: 0; height: 100vh;
+      overflow-y: auto; padding: 18px 14px 24px; box-sizing: border-box;
+      border-radius: 0; border-top: none; border-bottom: none; border-left: none;
     }
+    #canvas-wrap { flex: 1; position: relative; height: 100vh; overflow: hidden; }
+    canvas { display: block; }
     #stats  { font-size: 10px; color: var(--text-muted); line-height: 1.9; margin-bottom: 4px; }
     #status { font-size: 11px; color: var(--text-mid);   min-height: 16px; margin-bottom: 6px; }
     #regen-status { font-size: 10px; color: var(--text-muted); margin-top: 4px; text-align: center; }
 
-    /* Override full-screen loading → floating bottom bar */
+    /* Loading bar — bottom of canvas area */
     #loading {
-      position: fixed; inset: auto; bottom: 0; left: 0; right: 0;
+      position: absolute; bottom: 0; left: 0; right: 0;
       flex-direction: row; height: 44px; padding: 0 24px; gap: 14px;
       background: rgba(5,5,8,0.82); backdrop-filter: blur(6px);
       border-top: 1px solid rgba(74,158,255,0.12);
@@ -28,12 +31,8 @@
   </style>
 </head>
 <body>
-<div id="loading">
-  <div id="load-msg">Initialising…</div>
-  <div id="load-bar-wrap"><div id="load-bar"></div></div>
-</div>
-
-<div id="overlay" class="panel">
+<div id="panel3d" class="panel">
+  <button class="btn" onclick="window.history.back()" style="margin-bottom:8px">← SVG View</button>
   <h2>3D Map Preview</h2>
   <div id="status">Loading…</div>
   <div id="stats"></div>
@@ -107,12 +106,17 @@
     <div id="regen-status" style="font-size:10px;color:#555;margin-top:4px;text-align:center"></div>
   </div>
 
-  <button class="btn" onclick="window.close()">✕ Close</button>
   <div class="hint">
     Left drag — orbit<br>
     Right drag — zoom<br>
     Middle drag — pan<br>
     Scroll — zoom
+  </div>
+</div>
+<div id="canvas-wrap">
+  <div id="loading">
+    <div id="load-msg">Initialising…</div>
+    <div id="load-bar-wrap"><div id="load-bar"></div></div>
   </div>
 </div>
 
@@ -154,14 +158,16 @@ function proj(lon, lat) {
 }
 
 // ── Renderer ──────────────────────────────────────────────────────────────────
+const canvasWrap = document.getElementById('canvas-wrap');
+const CVPW = canvasWrap.clientWidth || (innerWidth - 272);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(devicePixelRatio);
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(CVPW, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
-document.body.appendChild(renderer.domElement);
+canvasWrap.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 const BG = 0x0d0e0f;
@@ -180,7 +186,7 @@ scene.add(sun);
 scene.add(new THREE.HemisphereLight(0x334466, 0x111118, 0.5));
 
 // ── Camera & controls ─────────────────────────────────────────────────────────
-const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 1, sceneW * 20);
+const camera = new THREE.PerspectiveCamera(48, CVPW / innerHeight, 1, sceneW * 20);
 const fitH   = Math.max(sceneW, sceneD) * 0.9;
 camera.position.set(0, fitH * 0.7, fitH);
 camera.lookAt(0, 0, 0);
@@ -925,9 +931,10 @@ document.getElementById('btn-rotate').addEventListener('click', function() {
 
 // ── Resize ────────────────────────────────────────────────────────────────────
 window.addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
+  const W = canvasWrap.clientWidth, H = innerHeight;
+  camera.aspect = W / H;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+  renderer.setSize(W, H);
 });
 
 </script>

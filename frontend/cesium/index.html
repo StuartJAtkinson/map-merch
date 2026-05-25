@@ -137,16 +137,11 @@
         #svg-scale-display { font-size: 11px; color: var(--text-mid); margin-bottom: 2px; }
         #svg-size-display  { font-size: 10px; color: var(--text-muted); margin-bottom: 10px; }
 
-        /* Floating save widget */
-        #save-float {
-            position: fixed; bottom: 24px; right: 24px;
-            width: 210px; z-index: 9999;
-            background: var(--bg-panel); border: 1px solid var(--border-panel);
-            border-radius: var(--radius-panel); padding: 12px 14px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        }
-        #save-float .btn { margin-top: 4px; }
-        #save-status { font-size: 11px; color: var(--text-mid); min-height: 14px; margin-top: 4px; }
+        /* Designs panel — save section */
+        #designs-save-section { padding-bottom: 4px; }
+        #designs-save-status { font-size: 11px; color: var(--text-mid); min-height: 14px; margin-top: 4px; }
+        #designs-logout { color: #e06060; border-color: var(--border-dim); }
+        #designs-logout:hover { border-color: #e06060; background: rgba(224,96,96,0.08); }
 
         /* My Designs FAB */
         #designs-fab {
@@ -331,13 +326,6 @@
     </div>
 </div>
 
-<!-- Floating save widget -->
-<div id="save-float" style="display:none">
-  <input type="text" class="save-input" id="save-name" placeholder="Design name…">
-  <button class="btn" id="btn-save">💾 Save design</button>
-  <div id="save-status"></div>
-</div>
-
 <!-- My Designs FAB -->
 <button id="designs-fab" style="display:none">⊞ My Designs</button>
 
@@ -349,6 +337,17 @@
     <button id="designs-close">×</button>
   </div>
   <div class="designs-hdr-email" id="designs-email"></div>
+  <button class="btn" id="designs-logout">↩ Logout</button>
+
+  <div id="designs-save-section" style="display:none">
+    <div class="divider"></div>
+    <div class="section-label" style="margin-top:8px">Save current design</div>
+    <input type="text" class="save-input" id="designs-save-name" placeholder="Design name…" style="margin-top:6px">
+    <button class="btn" id="designs-btn-save">💾 Save design</button>
+    <div id="designs-save-status"></div>
+  </div>
+
+  <div class="divider"></div>
   <div id="designs-content"><div class="designs-loading">Loading…</div></div>
 </div>
 

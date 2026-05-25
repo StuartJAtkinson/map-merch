@@ -1063,11 +1063,11 @@ async function openSvgView(url: string, text: string, stlResult: any) {
   if (!is3d) { svgDlBtn.style.borderColor = '#4a9eff'; svgDlBtn.style.color = '#4a9eff'; }
   else        { svgDlBtn.style.borderColor = ''; svgDlBtn.style.color = ''; }
 
-  // Show floating save widget: immediately for 2D, or 3D when data is already present; hide otherwise (waits for STL)
-  const saveFloat = document.getElementById('save-float')!;
-  const saveStatus = document.getElementById('save-status')!;
+  // Show save section in designs panel: immediately for 2D, or 3D when STL already present
+  const saveSection = document.getElementById('designs-save-section')!;
+  const saveStatus  = document.getElementById('designs-save-status')!;
   saveStatus.textContent = '';
-  saveFloat.style.display = (!is3d || stlResult) ? '' : 'none';
+  saveSection.style.display = (!is3d || stlResult) ? '' : 'none';
 
   svgView.style.display = 'flex';
   // Wait two frames so the browser has done a layout pass before measuring clientWidth
@@ -1079,7 +1079,7 @@ async function openSvgView(url: string, text: string, stlResult: any) {
 // ── SVG viewer event listeners ────────────────────────────────────────────────
 document.getElementById('btn-back')!.addEventListener('click', async () => {
   svgView.style.display = 'none';
-  document.getElementById('save-float')!.style.display = 'none';
+  document.getElementById('designs-save-section')!.style.display = 'none';
   const panel = document.getElementById('panel')!;
   panel.style.visibility = 'visible';
   await runReverseTransition();
@@ -1384,8 +1384,8 @@ async function saveProject(): Promise<void> {
   }
   if (!confirmed) return;
   const bbox      = rotSelAabb(confirmed);
-  const nameEl    = document.getElementById('save-name')    as HTMLInputElement;
-  const statusEl  = document.getElementById('save-status')  as HTMLElement;
+  const nameEl    = document.getElementById('designs-save-name')    as HTMLInputElement;
+  const statusEl  = document.getElementById('designs-save-status')  as HTMLElement;
   const name      = nameEl.value.trim() || `${merchType} — ${new Date().toLocaleDateString('en-GB')}`;
   statusEl.textContent = 'Saving…';
   try {
@@ -1428,13 +1428,12 @@ async function saveProject(): Promise<void> {
     if (!resp.ok) throw new Error(`Server ${resp.status}`);
     statusEl.textContent = 'Saved!';
     setTimeout(() => { statusEl.textContent = ''; }, 2500);
-    document.getElementById('designs-fab')!.style.display = '';
   } catch (e: any) {
     statusEl.textContent = `Error: ${e.message}`;
   }
 }
 
-document.getElementById('btn-save')!.addEventListener('click', saveProject);
+document.getElementById('designs-btn-save')!.addEventListener('click', saveProject);
 
 // ---------------------------------------------------------------------------
 // User nav
@@ -1443,32 +1442,26 @@ function updateUserNav(): void {
   const email  = localStorage.getItem('hoas_email');
   const navEls = document.querySelectorAll<HTMLElement>('.user-nav-slot');
   navEls.forEach(el => {
-    if (email) {
-      el.innerHTML = `<button class="btn" id="logout-btn-${el.dataset.slot}">↩ Logout</button>`;
-      el.querySelector(`#logout-btn-${el.dataset.slot}`)?.addEventListener('click', () => {
-        localStorage.removeItem('hoas_token');
-        localStorage.removeItem('hoas_refresh');
-        localStorage.removeItem('hoas_email');
-        updateUserNav();
-      });
-    } else {
-      el.innerHTML = `<a href="/login.html" class="btn">⊞ Sign in</a>`;
-    }
+    el.innerHTML = email ? '' : `<a href="/login.html" class="btn">⊞ Sign in</a>`;
   });
 }
 updateUserNav();
 
-async function checkDesignCount(): Promise<void> {
-  const token = localStorage.getItem('hoas_token');
-  if (!token) return;
-  try {
-    const r = await fetch('/api/projects', { headers: { 'Authorization': `Bearer ${token}` } });
-    if (!r.ok) return;
-    const projects: any[] = await r.json();
-    if (projects.length > 0) document.getElementById('designs-fab')!.style.display = '';
-  } catch { /* ignore */ }
+// Logout button lives in the designs panel
+document.getElementById('designs-logout')!.addEventListener('click', () => {
+  localStorage.removeItem('hoas_token');
+  localStorage.removeItem('hoas_refresh');
+  localStorage.removeItem('hoas_email');
+  window.location.href = '/login.html';
+});
+
+// FAB: show whenever the user is logged in (it's the entry for save + designs + logout)
+function checkAuthFab(): void {
+  if (localStorage.getItem('hoas_token')) {
+    document.getElementById('designs-fab')!.style.display = '';
+  }
 }
-checkDesignCount();
+checkAuthFab();
 
 document.getElementById('designs-fab')!.addEventListener('click', openDesignsPanel);
 
@@ -1478,9 +1471,8 @@ document.getElementById('designs-fab')!.addEventListener('click', openDesignsPan
 function onStlReady(): void {
   if (!['coaster','placemat','3d_print'].includes(merchType)) return;
   if (svgView.style.display === 'none') return;
-  const saveFloat = document.getElementById('save-float')!;
-  saveFloat.style.display = '';
-  const statusEl = document.getElementById('save-status')!;
+  document.getElementById('designs-save-section')!.style.display = '';
+  const statusEl = document.getElementById('designs-save-status')!;
   statusEl.textContent = '3D model ready — save your design';
   setTimeout(() => { if (statusEl.textContent.startsWith('3D model')) statusEl.textContent = ''; }, 3500);
 }
