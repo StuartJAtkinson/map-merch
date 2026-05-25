@@ -33,7 +33,7 @@
   <div id="load-bar-wrap"><div id="load-bar"></div></div>
 </div>
 
-<div id="overlay">
+<div id="overlay" class="panel">
   <h2>3D Map Preview</h2>
   <div id="status">Loading…</div>
   <div id="stats"></div>
@@ -406,7 +406,7 @@ let entryReady = false; // set true once meshes are built
 const cosLatEst  = Math.cos(cy * Math.PI / 180);
 const km2Est     = (east - west) * cosLatEst * 111.32 * (north - south) * 111.32;
 const fetchTau   = Math.max(1500, Math.min(8000, 1000 + km2Est * 800) / 3);
-const MIN_PRELOAD = 3000; // minimum ms before post-load animation starts
+let minPreload = 3000; // may be reduced if OSM data was served from cache
 const fetchStart = performance.now();
 (function preLoadBar(now) {
   if (entryReady) return;
@@ -414,23 +414,40 @@ const fetchStart = performance.now();
   requestAnimationFrame(preLoadBar);
 })(performance.now());
 
-// ── Fetch OSM via backend proxy ────────────────────────────────────────────────
-setLoad('Fetching map data…');
-const abortCtrl = new AbortController();
-const abortTmr  = setTimeout(() => abortCtrl.abort(), 60_000);
-
+// ── OSM data — use sessionStorage cache from SVG page if bbox matches ─────────
 let osmData;
-try {
-  const qs   = new URLSearchParams({ west, south, east, north });
-  const resp = await fetch(`/api/osm/features?${qs}`, { signal: abortCtrl.signal });
-  clearTimeout(abortTmr);
-  if (!resp.ok) throw new Error(`Backend ${resp.status}`);
-  osmData = await resp.json();
-} catch (e) {
-  clearTimeout(abortTmr);
-  setStatus(e.name === 'AbortError' ? 'Timed out — try a smaller area' : `Fetch error: ${e.message}`);
-  loadMsg.textContent = 'Failed';
-  throw e;
+let _usedCache = false;
+const _cachedStr = sessionStorage.getItem('hoas_osm_cache');
+if (_cachedStr) {
+  try {
+    const c = JSON.parse(_cachedStr);
+    const b = c.bbox, T = 0.0005;
+    if (Math.abs(b.west-west)<T && Math.abs(b.south-south)<T &&
+        Math.abs(b.east-east)<T && Math.abs(b.north-north)<T) {
+      osmData = c.data; _usedCache = true; minPreload = 800;
+    }
+  } catch { /* corrupt cache — fall through to network */ }
+  sessionStorage.removeItem('hoas_osm_cache');
+}
+
+if (!_usedCache) {
+  setLoad('Fetching map data…');
+  const abortCtrl = new AbortController();
+  const abortTmr  = setTimeout(() => abortCtrl.abort(), 60_000);
+  try {
+    const qs   = new URLSearchParams({ west, south, east, north });
+    const resp = await fetch(`/api/osm/features?${qs}`, { signal: abortCtrl.signal });
+    clearTimeout(abortTmr);
+    if (!resp.ok) throw new Error(`Backend ${resp.status}`);
+    osmData = await resp.json();
+  } catch (e) {
+    clearTimeout(abortTmr);
+    setStatus(e.name === 'AbortError' ? 'Timed out — try a smaller area' : `Fetch error: ${e.message}`);
+    loadMsg.textContent = 'Failed';
+    throw e;
+  }
+} else {
+  setLoad('Parsing features…');
 }
 
 setLoad('Parsing features…');
@@ -540,9 +557,9 @@ for (const way of ways) {
   }
 }
 
-// Enforce minimum 3 s pre-load before the post-load animation starts
+// Enforce minimum pre-load before the post-load animation starts
 const preElapsed = performance.now() - fetchStart;
-if (preElapsed < MIN_PRELOAD) await new Promise(r => setTimeout(r, MIN_PRELOAD - preElapsed));
+if (preElapsed < minPreload) await new Promise(r => setTimeout(r, minPreload - preElapsed));
 
 controls.update();
 setStatus('');

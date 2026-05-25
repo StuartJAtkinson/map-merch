@@ -837,6 +837,74 @@ async function runReverseTransition(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// SVG → 3D exit transition
+// ---------------------------------------------------------------------------
+async function runSvgTo3dTransition(): Promise<void> {
+  const ov  = document.getElementById('transition-overlay') as HTMLCanvasElement;
+  const ctx = ov.getContext('2d')!;
+  const W = window.innerWidth, H = window.innerHeight;
+  ov.width = W; ov.height = H;
+  ov.style.display = 'block';
+  ov.style.opacity = '1';
+  ov.style.transition = '';
+
+  let img: HTMLImageElement | null = null;
+  if (svgCurrentUrl) img = await loadImg(svgCurrentUrl).catch(() => null);
+
+  if (!img) {
+    await animPhase(350, t => { ctx.fillStyle = `rgba(0,0,0,${t})`; ctx.fillRect(0, 0, W, H); });
+    return;
+  }
+
+  const ratio = svgNatW / svgNatH || 1;
+  const vw = W - SVG_PANEL_W, m = 40;
+  let fw: number, fh: number;
+  if ((vw - m*2) / (H - m*2) > ratio) { fh = H - m*2; fw = fh * ratio; }
+  else                                  { fw = vw - m*2; fh = fw / ratio; }
+  const fx = SVG_PANEL_W + (vw - fw) / 2;
+  const fy = (H - fh) / 2;
+
+  const PEAK_DIV = 16;
+  const snap = document.createElement('canvas');
+  snap.width = Math.round(fw); snap.height = Math.round(fh);
+  snap.getContext('2d')!.drawImage(img, 0, 0, snap.width, snap.height);
+  const scratch = document.createElement('canvas');
+  const scratchCtx = scratch.getContext('2d')!;
+
+  const TAU = 650;
+  const t0 = performance.now();
+
+  await new Promise<void>(resolve => {
+    function loop(ts: number): void {
+      const elapsed = ts - t0;
+      const t = 1 - Math.exp(-elapsed / TAU);
+
+      const bSize = 1 + (PEAK_DIV - 1) * t;
+      const bW = Math.max(1, Math.round(fw / bSize));
+      const bH = Math.max(1, Math.round(fh / bSize));
+      if (scratch.width !== bW || scratch.height !== bH) { scratch.width = bW; scratch.height = bH; }
+      scratchCtx.drawImage(snap, 0, 0, bW, bH);
+
+      ctx.fillStyle = '#0d0e12'; ctx.fillRect(0, 0, W, H);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(scratch, 0, 0, bW, bH,
+        fx * (1 - t), fy * (1 - t),
+        fw + (W - fw) * t, fh + (H - fh) * t);
+      ctx.imageSmoothingEnabled = true;
+
+      const dark = Math.max(0, (t - 0.72) / 0.28);
+      if (dark > 0) { ctx.fillStyle = `rgba(0,0,0,${dark})`; ctx.fillRect(0, 0, W, H); }
+
+      if (t >= 0.95) { resolve(); return; }
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  });
+
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+}
+
+// ---------------------------------------------------------------------------
 // Inline SVG viewer
 // ---------------------------------------------------------------------------
 const SVG_COLOUR_DEFS = [
@@ -1062,22 +1130,28 @@ document.getElementById('svg-tog-buildings')!.addEventListener('click', function
 svg3dBtn.addEventListener('click', async () => {
   if (!confirmed) return;
   const bbox = rotSelAabb(confirmed);
-  svgVp.classList.add('tilt-away');
 
-  // Blob URLs die on page navigation — persist to server first so 3D viewer can load it
+  // Persist blob URL to server (parallel with transition — blob dies on navigation)
   let svgParamUrl = svgCurrentUrl;
-  if (svgCurrentText && svgCurrentUrl.startsWith('blob:')) {
-    try {
-      const r = await fetch('/api/save-svg', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+  const saveP = (svgCurrentText && svgCurrentUrl.startsWith('blob:'))
+    ? fetch('/api/save-svg', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ svg_text: svgCurrentText }),
-      });
-      if (r.ok) svgParamUrl = (await r.json()).svg_url;
-    } catch { /* fall through with blob url */ }
+      }).then(async r => { if (r.ok) svgParamUrl = (await r.json()).svg_url; }).catch(() => {})
+    : Promise.resolve();
+
+  // Cache OSM data so 3D viewer can skip the Overpass re-fetch
+  if (_cachedOsmData) {
+    try {
+      sessionStorage.setItem('hoas_osm_cache', JSON.stringify({
+        bbox: { west: bbox.west, south: bbox.south, east: bbox.east, north: bbox.north },
+        data: _cachedOsmData,
+      }));
+    } catch { /* quota exceeded — 3D viewer will re-fetch */ }
   }
 
-  await new Promise(r => setTimeout(r, 650));
+  await Promise.all([runSvgTo3dTransition(), saveP]);
+
   const p = new URLSearchParams({
     svg: svgParamUrl,
     west: String(bbox.west), south: String(bbox.south),
