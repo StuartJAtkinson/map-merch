@@ -38,9 +38,18 @@ os.makedirs(os.path.join(DATA_DIR, "stl_output"), exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import logging
+    log = logging.getLogger("startup")
     from app.core.database import Base
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    log.warning("DB URL driver: %s", engine.url.drivername)
+    log.warning("Metadata tables before create_all: %s", list(Base.metadata.tables.keys()))
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        log.warning("create_all finished — tables now: %s", list(Base.metadata.tables.keys()))
+    except Exception as exc:
+        log.error("create_all FAILED: %s", exc, exc_info=True)
+        raise
     yield
 
 
