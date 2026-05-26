@@ -100,7 +100,7 @@ jobs:
   publish-images:
     name: Push to ghcr.io
     needs: [lint-backend, typecheck-frontend, build-frontend, scan-secrets]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
