@@ -1,10 +1,10 @@
 """Lightweight timing logger — writes to <project-root>/timing.log and stdout."""
+import os as _os
 import time
 from pathlib import Path
 from fastapi import APIRouter
 
 VERSION = "current"
-import os as _os
 LOG_PATH = Path(_os.environ.get("DATA_DIR", str(Path(__file__).resolve().parents[2]))) / "timing.log"
 
 def tlog(label: str, ms: float, extra: str = "") -> None:
