@@ -485,6 +485,11 @@ function selectMerch(el: HTMLElement): void {
   el.classList.add('active');
   merchType = newType;
 
+  // Drop cached SVG/STL when merch type changes — must regenerate
+  _cachedSvgResult = null;
+  _cachedOsmData = null;
+  svgCurrentStl = null;
+
   if (editState === 'editing' && !sameType) {
     // Different merch: update ratio, keep existing selection
     _live = enforceRatio(_live!, MERCH_RATIO[merchType] ?? 1);
@@ -520,6 +525,21 @@ function estimateGenMs(bbox: BBox): number {
   const cosL = Math.cos((bbox.north + bbox.south) / 2 * Math.PI / 180);
   const km2 = (bbox.east - bbox.west) * cosL * 111.32 * (bbox.north - bbox.south) * 111.32;
   return Math.min(30_000, 1_000 + km2 * 1_200);
+}
+
+async function fetchEstimate(bbox: BBox, merchType: string): Promise<{
+  osm_estimate_ms: number; svg_estimate_ms: number; stl_estimate_ms: number;
+  area_km2: number; element_count: number; complexity: string;
+} | null> {
+  try {
+    const r = await fetch('/api/estimate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bbox, merch_type: merchType }),
+    });
+    if (r.ok) return r.json();
+  } catch { /* ignore */ }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -704,7 +724,7 @@ async function runTransition(
       ctx.drawImage(scratch, 0, 0, bW, bH, dx, dy, dw, dh);
       ctx.imageSmoothingEnabled = true;
 
-      const prog = svgDone ? 1 : Math.min(0.95, elapsed / Math.max(1, estimatedMs));
+      const prog = svgDone ? 1 : Math.min(1, elapsed / Math.max(1, estimatedMs));
       drawProgressBar(ctx, BAR_X, BAR_Y, BAR_W, BAR_H, prog);
 
       if (svgDone && t >= 0.82) { resolve(); return; }
@@ -781,9 +801,10 @@ async function runReverseTransition(): Promise<void> {
     else     sCtx.drawImage(frame, 0, 0, W, H);
   }
 
-  const scratch = document.createElement('canvas');
+const scratch = document.createElement('canvas');
   const scratchCtx = scratch.getContext('2d')!;
-  const TAU_REV = 1_600;
+  // 1 second full reverse animation (t reaches 0.08 at ~1035ms with exp decay)
+  const TAU_REV = 435;
   const t0 = performance.now();
 
   await new Promise<void>(resolve => {
@@ -864,40 +885,35 @@ async function runSvgTo3dTransition(): Promise<void> {
   const fx = SVG_PANEL_W + (vw - fw) / 2;
   const fy = (H - fh) / 2;
 
-  const PEAK_DIV = 16;
-  const snap = document.createElement('canvas');
-  snap.width = Math.round(fw); snap.height = Math.round(fh);
-  snap.getContext('2d')!.drawImage(img, 0, 0, snap.width, snap.height);
-  const scratch = document.createElement('canvas');
-  const scratchCtx = scratch.getContext('2d')!;
-
-  const TAU = 650;
+  const TAU = 800;
   const t0 = performance.now();
+
+  // Start: SVG centred in right-of-panel viewport. End: fill full window.
+  const startTx = fx, startTy = fy;
+  const startTw = fw, startTh = fh;
+  const endTx = 0, endTy = 0;
+  const endTw = W, endTh = H;
 
   await new Promise<void>(resolve => {
     function loop(ts: number): void {
       const elapsed = ts - t0;
-      const t = 1 - Math.exp(-elapsed / TAU);
-
-      const bSize = 1 + (PEAK_DIV - 1) * t;
-      const bW = Math.max(1, Math.round(fw / bSize));
-      const bH = Math.max(1, Math.round(fh / bSize));
-      if (scratch.width !== bW || scratch.height !== bH) { scratch.width = bW; scratch.height = bH; }
-      scratchCtx.drawImage(snap, 0, 0, bW, bH);
+      // Smooth ease-in-out (cubic hermite) over TAU ms
+      const p = Math.min(1, elapsed / TAU);
+      const t = 3 * p * p - 2 * p * p * p;
 
       ctx.fillStyle = '#0d0e12'; ctx.fillRect(0, 0, W, H);
-      ctx.imageSmoothingEnabled = false;
-      // zoom to the 3D canvas area (right of 272 px sidebar), not full window
-      const tx = fx + (SVG_PANEL_W - fx) * t;
-      const tw = fw + (W - SVG_PANEL_W - fw) * t;
-      ctx.drawImage(scratch, 0, 0, bW, bH, tx, fy * (1 - t), tw, fh + (H - fh) * t);
       ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(img!, 0, 0, fw, fh,
+        startTx + (endTx - startTx) * t,
+        startTy + (endTy - startTy) * t,
+        startTw + (endTw - startTw) * t,
+        startTh + (endTh - startTh) * t);
 
-      // brief fade only in the last 12 % — just covers the browser page-nav flash
+      // Brief fade at the very end to smooth the page-load flash
       const dark = Math.max(0, (t - 0.88) / 0.12);
       if (dark > 0) { ctx.fillStyle = `rgba(0,0,0,${dark})`; ctx.fillRect(0, 0, W, H); }
 
-      if (t >= 0.97) { resolve(); return; }
+      if (t >= 0.99) { resolve(); return; }
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);
@@ -1223,10 +1239,20 @@ async function generate(): Promise<void> {
   const _area = `km2=${_km2}`;
   tPost('generate_start', 0, _area);
 
-  const abort = new AbortController();
+const abort = new AbortController();
   setTimeout(() => abort.abort(), 90_000);
 
-  const estimatedMs = estimateGenMs(bbox);
+  // Call pre-flight estimate endpoint for accurate OSM + SVG + STL timing
+  const estimate = await fetchEstimate(bbox, merchType).catch(() => null);
+  const osmEstimatedMs = estimate?.osm_estimate_ms ?? estimateGenMs(bbox);
+  const estimatedMs = (estimate?.svg_estimate_ms ?? estimateGenMs(bbox)) + osmEstimatedMs;
+  const stlEstimatedMs = estimate?.stl_estimate_ms ?? 0;
+
+  // Show area complexity in status bar
+  if (estimate) {
+    const label: Record<string, string> = { low: 'Simple area', medium: 'Medium density', high: 'Complex area', very_high: 'Very complex — may be slow' };
+    status.textContent = `${estimate.area_km2} km² · ${(estimate.element_count / 1000).toFixed(1)}k elements · ${label[estimate.complexity] ?? estimate.complexity}`;
+  }
 
   async function fetchJson(url: string, body: object, signal?: AbortSignal) {
     const r = await fetch(url, {

@@ -53,6 +53,35 @@ jobs:
       - name: Scan
         run: gitleaks detect --source . --exit-code 1
 
+  # ── Tests ─────────────────────────────────────────────────────────────────────
+
+  test-backend:
+    name: Smoke tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r backend/requirements.txt
+      - run: pip install httpx
+        # httpx is listed but force-install to get the test client extras
+      - name: Start backend server for smoke tests
+        run: |
+          cd backend
+          python -m uvicorn app.api.router:app --host 127.0.0.1 --port 8000 &
+          BACKEND_PID=$!
+          echo "Backend PID: $BACKEND_PID"
+          # Wait for it to be ready
+          for i in $(seq 1 30); do
+            curl -s http://127.0.0.1:8000/health && break
+            sleep 1
+          done
+          # Run tests with DB disabled (tests hit real Overpass, not DB)
+          TEST_TARGET=http://127.0.0.1:8000 python -m pytest tests/smoke.py -v --tb=short
+          kill $BACKEND_PID 2>/dev/null || true
+
   # ── Build validation ──────────────────────────────────────────────────────────
 
   build-backend:
@@ -99,7 +128,7 @@ jobs:
 
   publish-images:
     name: Push to ghcr.io
-    needs: [lint-backend, typecheck-frontend, build-frontend, scan-secrets]
+    needs: [lint-backend, typecheck-frontend, build-frontend, scan-secrets, test-backend]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
