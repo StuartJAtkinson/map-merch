@@ -1073,14 +1073,6 @@ async function showCachedSvg(): Promise<void> {
   }
 }
 
-document.getElementById('svg-btn-fit')!.addEventListener('click', svgFit);
-document.getElementById('svg-btn-100')!.addEventListener('click', () => {
-  svgScl = 1;
-  svgTx = (svgVp.clientWidth  - svgNatW) / 2;
-  svgTy = (svgVp.clientHeight - svgNatH) / 2;
-  svgApply();
-});
-
 svg3dBtn.addEventListener('click', async () => {
   if (!confirmed) return;
   const bbox = rotSelAabb(confirmed);
