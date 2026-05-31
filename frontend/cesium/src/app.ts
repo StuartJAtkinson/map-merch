@@ -1479,6 +1479,17 @@ function onStlReady(): void {
   const statusEl = document.getElementById('svg-save-status')!;
   statusEl.textContent = '3D model ready — save your design';
   setTimeout(() => { if (statusEl.textContent.startsWith('3D model')) statusEl.textContent = ''; }, 3500);
+
+  // If 3D viewer is already open, enable the print button now that STL is ready
+  if (_viewer3d && svgCurrentStl &&
+      document.getElementById('viewer-3d-view')!.style.display !== 'none') {
+    _viewer3d.enablePrintButton(
+      svgCurrentStl.stl_buildings_url,
+      svgCurrentStl.stl_land_url,
+      svgCurrentStl.stl_water_url,
+      svgCurrentStl.stl_solid_url ?? null,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

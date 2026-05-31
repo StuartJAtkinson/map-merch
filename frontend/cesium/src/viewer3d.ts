@@ -76,6 +76,7 @@ export class Viewer3D {
   private wiresOn        = false;
 
   private loopRunning = false;
+  private _currentScene: Viewer3DScene | null = null;
 
   constructor(canvasWrap: HTMLElement) {
     this.canvasWrap = canvasWrap;
@@ -122,6 +123,7 @@ export class Viewer3D {
     const stlS = s.stlSolid     ?? null;
     const hasParts = !!(stlB && stlL && stlW);
     const is3d = ['coaster','placemat','relief','3d_print'].includes(merch);
+    this._currentScene = s;
 
     // Reset state
     this.fabricLoaded = this.showingPreview = false;
@@ -478,6 +480,26 @@ export class Viewer3D {
       this.controls.autoRotate=!this.controls.autoRotate;
       rBtn.classList.toggle('on',this.controls.autoRotate);
       rBtn.textContent=this.controls.autoRotate?'⏸ Pause':'▶ Auto-rotate';
+    });
+  }
+
+  // ── Called from app.ts when STL generation completes after view is open ────
+  enablePrintButton(stlB: string, stlL: string, stlW: string, stlS: string | null): void {
+    const s = this._currentScene;
+    if (!s) return;
+    const is3d = ['coaster','placemat','relief','3d_print'].includes(s.merch);
+    if (!is3d) return;
+    const btn = this._freshBtn('btn-3d-mode');
+    this._show('btn-3d-mode', true);
+    btn.textContent = '🖨 3D Print →';
+    btn.addEventListener('click', () => {
+      localStorage.setItem('hoas_print_data', JSON.stringify({
+        west: s.west, south: s.south, east: s.east, north: s.north,
+        stl_buildings_url: stlB, stl_land_url: stlL, stl_water_url: stlW, stl_solid_url: stlS,
+        svg_url: s.svgUrl, merch_type: s.merch, coaster_shape: s.coasterShape,
+        palette_overrides: s.paletteOverrides ?? null,
+      }));
+      window.location.href = '/3d-print.html';
     });
   }
 
