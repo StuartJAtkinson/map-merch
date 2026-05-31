@@ -22,11 +22,11 @@ OTHER_ROADS = {'tertiary', 'residential', 'unclassified', 'service', 'living_str
 PATHS       = {'footway', 'cycleway', 'path', 'pedestrian', 'track', 'bridleway', 'steps'}
 
 ROAD_WIDTH = {
-    'motorway': 2, 'trunk': 1.8, 'primary': 1.5, 'secondary': 1.2,
-    'tertiary': 1, 'residential': 0.8, 'unclassified': 0.8,
-    'service': 0.6, 'living_street': 0.8, 'road': 0.8,
-    'footway': 0.5, 'cycleway': 0.5, 'path': 0.5,
-    'pedestrian': 0.6, 'track': 0.5, 'bridleway': 0.5, 'steps': 0.5,
+    'motorway': 1.0, 'trunk': 1.0, 'primary': 0.9, 'secondary': 0.9,
+    'tertiary': 0.8, 'residential': 0.7, 'unclassified': 0.7,
+    'service': 0.6, 'living_street': 0.7, 'road': 0.7,
+    'footway': 0.7, 'cycleway': 0.7, 'path': 0.7,
+    'pedestrian': 0.7, 'track': 0.6, 'bridleway': 0.6, 'steps': 0.6,
 }
 
 RAILWAY_TYPES = {'rail', 'tram', 'subway', 'light_rail', 'narrow_gauge', 'monorail'}
