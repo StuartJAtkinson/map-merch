@@ -252,9 +252,25 @@ async function loadPrintParts(b, l, w) {
   const worldBox = new THREE.Box3().setFromObject(printGroup);
   const centre = new THREE.Vector3(); worldBox.getCenter(centre);
   printGroup.position.set(-centre.x, -worldBox.min.y + 1, -centre.z);
-  _watRestLocalY = 4/3; _lndRestLocalY = 8/3;
 
-  const bldWB = new THREE.Box3().setFromObject(printLayers.buildings);
+  // Compute rest positions from actual STL bounding boxes so they're correct
+  // regardless of any normalization differences in the generated geometry.
+  const bldgBox = new THREE.Box3().setFromObject(printLayers.buildings);
+  const watBox  = new THREE.Box3().setFromObject(printLayers.water);
+  const lndBox  = new THREE.Box3().setFromObject(printLayers.land);
+  const sy = printGroup.scale.y;
+  const py = printGroup.position.y;
+  const bldgLocalMin = (bldgBox.min.y - py) / sy;
+  const bldgLocalMax = (bldgBox.max.y - py) / sy;
+  const bldgLocalH   = bldgLocalMax - bldgLocalMin;
+  const lndLocalH    = (lndBox.max.y - lndBox.min.y) / sy;
+  const watLocalH    = (watBox.max.y - watBox.min.y) / sy;
+  // Water starts at 1/3 up; land bottom aligns with land_start = 2/3 up
+  _watRestLocalY = bldgLocalMin + bldgLocalH / 3;
+  // Land bottom set so land top is flush with building top
+  _lndRestLocalY = bldgLocalMin + bldgLocalH - lndLocalH;
+
+  const bldWB = bldgBox;
   const bpW = sz.x, bpD = sz.z, bpH = 0.008 * Math.max(bpW, bpD);
   const bpMat = new THREE.MeshStandardMaterial({ color: 0x787870, roughness: 0.85, metalness: 0.04 });
   bpMat._solidColor = 0x787870; bpMat._wireColor = 0x778899; allMats.push(bpMat);
