@@ -1,5 +1,3 @@
-from datetime import datetime
-from typing import Optional
 from pydantic import BaseModel, Field
 
 
@@ -10,12 +8,6 @@ class BBox(BaseModel):
     west: float = Field(..., ge=-180, le=180)
 
 
-class MerchType(BaseModel):
-    type: str = Field(..., pattern="^(placemat|coaster|tshirt|mug|tote|3d_print)$")
-    aspect_ratio_x: int = Field(default=3)
-    aspect_ratio_y: int = Field(default=4)
-
-
 MERCH_SPECS = {
     "placemat": {"ratio_x": 14, "ratio_y": 10, "dpi": 300, "width_px": 4200, "height_px": 3000},
     "coaster": {"ratio_x": 1, "ratio_y": 1, "dpi": 300, "width_px": 1000, "height_px": 1000},
@@ -24,24 +16,6 @@ MERCH_SPECS = {
     "tote": {"ratio_x": 2, "ratio_y": 3, "dpi": 300, "width_px": 2000, "height_px": 3000},
     "3d_print": {"ratio_x": 1, "ratio_y": 1, "dpi": 150, "width_px": 800, "height_px": 800},
 }
-
-
-class DesignProjectCreate(BaseModel):
-    name: str
-    bbox: BBox
-    merch_type: str = Field(..., pattern="^(placemat|coaster|tshirt|mug|tote|3d_print)$")
-
-
-class DesignProjectResponse(BaseModel):
-    id: int
-    name: str
-    bbox: BBox
-    merch_type: str
-    status: str
-    svg_url: Optional[str] = None
-    stl_url: Optional[str] = None
-    license_info: dict
-    created_at: datetime
 
 
 class SVGGenerationRequest(BaseModel):

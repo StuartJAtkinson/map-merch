@@ -43,7 +43,7 @@ const STYLES: Record<string, Palette> = {
     urban_res:'#E8E0D4', urban_ind:'#D4CCC0', water:'#A8C8E8',
     road_main:'#FFFFFF', road_other:'#F0EBE0', road_path:'#E0DAD0',
     railway:'#444444', building:'#CEC8C0', label:'#404040',
-    show_minor_roads:true, show_paths:false, show_buildings:true,
+    show_minor_roads:true, show_paths:true, show_buildings:true,
     show_labels:false, show_railways:false,
   },
   minimalist: {
@@ -59,7 +59,7 @@ const STYLES: Record<string, Palette> = {
     urban_res:'#F0D8B0', urban_ind:'#D8C090', water:'#50A8E0',
     road_main:'#FFFFFF', road_other:'#F8EDD8', road_path:'#EDE0C8',
     railway:'#222222', building:'#C8A888', label:'#202020',
-    show_minor_roads:true, show_paths:false, show_buildings:true,
+    show_minor_roads:true, show_paths:true, show_buildings:true,
     show_labels:false, show_railways:true,
   },
 };
@@ -149,13 +149,9 @@ export function renderSvg(opts: SvgRenderOptions): SVGSVGElement {
   const W = opts.width_px  ?? spec.width_px;
   const H = opts.height_px ?? spec.height_px;
 
-  // Feature visibility thresholds — hide small elements at large scales
-  const [bWest, bSouth, bEast, bNorth] = bbox;
-  const cosLatM = Math.cos(((bSouth + bNorth) / 2) * Math.PI / 180);
-  const areaKm2 = (bEast - bWest) * cosLatM * 111.32 * (bNorth - bSouth) * 111.32;
-  const autoBuildings  = areaKm2 < 4.0;
-  const autoMinorRoads = areaKm2 < 10.0;
-  const autoPaths      = areaKm2 < 0.8;
+  // No area-scale filtering — render everything the selection contains. Selection size
+  // is hard-capped at the frontend selector, so there is no need to thin out features
+  // for large areas here.
 
   // Parse OSM
   const nodes = new Map<number, [number,number]>();
@@ -242,7 +238,7 @@ export function renderSvg(opts: SvgRenderOptions): SVGSVGElement {
   }
 
   // 3. Buildings
-  if (includeBuildings && palette['show_buildings'] && autoBuildings) {
+  if (includeBuildings && palette['show_buildings']) {
     for (const way of ways) {
       const tags = (way.tags ?? {}) as Record<string,string>;
       if (!tags.building || tags.building === 'no') continue;
@@ -258,8 +254,8 @@ export function renderSvg(opts: SvgRenderOptions): SVGSVGElement {
     if (!hw) continue;
     let color: string;
     if (MAIN_ROADS.has(hw))       color = palette['road_main'] as string;
-    else if (OTHER_ROADS.has(hw)) { if (!palette['show_minor_roads'] || !autoMinorRoads) continue; color = palette['road_other'] as string; }
-    else if (PATHS.has(hw))       { if (!palette['show_paths'] || !autoPaths) continue; color = palette['road_path'] as string; }
+    else if (OTHER_ROADS.has(hw)) { if (!palette['show_minor_roads']) continue; color = palette['road_other'] as string; }
+    else if (PATHS.has(hw))       { if (!palette['show_paths']) continue; color = palette['road_path'] as string; }
     else continue;
     const pts = wayPts(way);
     if (pts.length >= 2) addPath(pathD(pts), null, color, ROAD_W[hw] ?? 1.5, 'round', 'round');

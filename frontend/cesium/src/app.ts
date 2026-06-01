@@ -126,6 +126,18 @@ function selShapePoints(s: RotSel): { lon: number; lat: number }[] {
   return rotSelCorners(s);
 }
 
+// The actual rendered shape of the current selection — drives the true-area maths so the
+// 0→MAX_AREA_KM2 scale measures the real shape, not its bounding box. Circle & hexagon are
+// radial (defined by a single radius = half-height); everything else is a ratio'd rect.
+const HEX_AREA_K = 3 * Math.sqrt(3) / 2;  // regular-hexagon area = K · circumradius²
+function selShapeKind(): 'circle' | 'hexagon' | 'rect' {
+  if (merchType === 'coaster') {
+    if (coasterShape === 'circle')  return 'circle';
+    if (coasterShape === 'hexagon') return 'hexagon';
+  }
+  return 'rect';
+}
+
 function rotSelAabb(s: RotSel): BBox {
   const c = rotSelCorners(s);
   return {
@@ -144,14 +156,17 @@ function cornerOf(c: Corner, s: RotSel): { lon: number; lat: number } {
   return rotSelCorners(s)[idx];
 }
 
+// Apply the merch aspect ratio while drawing/resizing: expand the short axis to match,
+// then cap the TRUE shape area at MAX_AREA_KM2. (Switching merch/shape preserves area
+// instead — see selectMerch / stepCoasterShape, which capture the area first.)
+// selAreaKm2 and shapeForArea are hoisted function declarations defined further below.
 function enforceRatio(s: RotSel, ratio: number): RotSel {
   const cosL = Math.cos(s.cy * Math.PI / 180);
   const wM = s.hw * cosL * 111_320 * 2, hM = s.hh * 111_320 * 2;
-  if (wM / hM > ratio) {
-    return { ...s, hh: (wM / ratio) / 111_320 / 2 };
-  } else {
-    return { ...s, hw: (hM * ratio) / (cosL * 111_320) / 2 };
-  }
+  const next: RotSel = (wM / hM > ratio)
+    ? { ...s, hh: (wM / ratio) / 111_320 / 2 }
+    : { ...s, hw: (hM * ratio) / (cosL * 111_320) / 2 };
+  return selAreaKm2(next) > MAX_AREA_KM2 ? shapeForArea(next, ratio, MAX_AREA_KM2) : next;
 }
 
 // ---------------------------------------------------------------------------
@@ -404,7 +419,10 @@ function enterEditing(s: RotSel): void {
         const ratio = MERCH_RATIO[merchType] ?? 1;
         const wM = hw * cosL * 111_320, hM = hh * 111_320;
         if (wM / hM > ratio) hh = wM / ratio / 111_320; else hw = hM * ratio / (cosL * 111_320);
-        _live = { ..._live, hw, hh };
+        let next: RotSel = { ..._live, hw, hh };
+        // Hard cap: cannot resize beyond MAX_AREA_KM2 — clamp to the ratio-correct max rect.
+        if (selAreaKm2(next) > MAX_AREA_KM2) next = shapeForArea(next, ratio, MAX_AREA_KM2);
+        _live = next;
       } else if (typeof dragMode === 'object' && dragMode.kind === 'rotate' && dragRotStart) {
         const cosL = Math.cos(dragRotStart.cy * Math.PI / 180);
         const angle = Math.atan2((cur.lon - dragRotStart.cx) * cosL, cur.lat - dragRotStart.cy);
@@ -469,10 +487,34 @@ function exitEditing(): void {
 
 const MAX_AREA_KM2 = 100;
 
+// True area of the actual rendered shape (rotation-invariant), in km². Circle/hexagon use
+// their radius (= half-height); rect uses w·h. So the cap and the readout measure the real
+// shape, and circle/hex/square all cover the SAME km² at a given scale setting.
 function selAreaKm2(sel: RotSel): number {
-  const b = rotSelAabb(sel);
-  const cosLat = Math.cos((b.south + b.north) / 2 * Math.PI / 180);
-  return (b.east - b.west) * cosLat * 111.32 * (b.north - b.south) * 111.32;
+  const kind = selShapeKind();
+  const rM = sel.hh * 111_320;  // radial shapes: radius = half-height in metres
+  if (kind === 'circle')  return (Math.PI * rM * rM) / 1e6;
+  if (kind === 'hexagon') return (HEX_AREA_K * rM * rM) / 1e6;
+  const cosLat = Math.cos(sel.cy * Math.PI / 180);
+  const wM = sel.hw * cosLat * 111_320 * 2, hM = sel.hh * 111_320 * 2;
+  return (wM * hM) / 1e6;
+}
+
+// Half-dims for a selection of the given TRUE area (km²) under the current shape, at the
+// selection's latitude. The basis for the 0→MAX_AREA_KM2 scale: every shape (any rect
+// ratio, circle, hexagon) is re-derived to hit the same real area.
+function shapeForArea(sel: RotSel, ratio: number, areaKm2: number): RotSel {
+  const cosL = Math.cos(sel.cy * Math.PI / 180);
+  const areaM2 = Math.max(areaKm2, 0) * 1e6;
+  const kind = selShapeKind();
+  if (kind === 'circle' || kind === 'hexagon') {
+    // Solve radius from the shape's area formula; bounding box is a square (hw=hh in m).
+    const rM = Math.sqrt(areaM2 / (kind === 'circle' ? Math.PI : HEX_AREA_K));
+    return { ...sel, hw: rM / (cosL * 111_320), hh: rM / 111_320 };
+  }
+  const hM = Math.sqrt(areaM2 / ratio);
+  const wM = ratio * hM;
+  return { ...sel, hw: wM / 2 / (cosL * 111_320), hh: hM / 2 / 111_320 };
 }
 
 function updateBboxDisplay(): void {
@@ -525,15 +567,18 @@ function clearGeneratedState(): void {
 function selectMerch(el: HTMLElement): void {
   const newType = el.dataset.type!;
   const sameType = newType === merchType;
+  // Capture the current TRUE shape area before the merch type (and thus shape) changes.
+  const prevArea = (editState === 'editing' && _live) ? selAreaKm2(_live) : null;
   document.querySelectorAll('.merch-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
   merchType = newType;
 
   clearGeneratedState();
 
-  if (editState === 'editing' && !sameType) {
-    // Different merch: update ratio, keep existing selection
-    _live = enforceRatio(_live!, MERCH_RATIO[merchType] ?? 1);
+  if (editState === 'editing' && !sameType && prevArea !== null) {
+    // Different merch: re-shape the SAME real area under the new ratio/shape — never grow
+    // an axis. So a 100 km² placemat → a 100 km² coaster (square / circle / hexagon).
+    _live = shapeForArea(_live!, MERCH_RATIO[merchType] ?? 1, Math.min(prevArea, MAX_AREA_KM2));
     confirmed = { ..._live };
     updateBboxDisplay();
   } else {
@@ -1209,7 +1254,8 @@ async function generate(): Promise<void> {
   const _t0 = performance.now();
   const _cosLat = Math.cos((bbox.south + bbox.north) / 2 * Math.PI / 180);
   const _km2 = Math.round((bbox.east - bbox.west) * _cosLat * 111.32 * (bbox.north - bbox.south) * 111.32 * 100) / 100;
-  if (_km2 > MAX_AREA_KM2) { clearGeneratedState(); return; }
+  // Guard on TRUE selection area (rotation-invariant), matching the selector's hard cap.
+  if (selAreaKm2(confirmed) > MAX_AREA_KM2) { clearGeneratedState(); return; }
   const _area = `km2=${_km2}`;
   tPost('generate_start', 0, _area);
 
@@ -1311,10 +1357,19 @@ const abort = new AbortController();
 // Coaster shape cycling
 // ---------------------------------------------------------------------------
 function stepCoasterShape(dir: 1 | -1): void {
+  // Capture the real area before the shape changes so we can preserve it after.
+  const prevArea = (editState === 'editing' && _live) ? selAreaKm2(_live) : null;
   coasterShapeIdx = (coasterShapeIdx + dir + COASTER_SHAPES.length) % COASTER_SHAPES.length;
   coasterShape = COASTER_SHAPES[coasterShapeIdx];
   document.getElementById('coaster-icon')!.textContent  = COASTER_ICONS[coasterShape];
   document.getElementById('coaster-shape-label')!.textContent = COASTER_LABELS[coasterShape];
+  // Re-derive geometry so the new shape covers the SAME real km² (square↔circle↔hexagon
+  // all cover equal area at a given scale; the bounding box grows/shrinks to suit).
+  if (prevArea !== null) {
+    _live = shapeForArea(_live!, MERCH_RATIO[merchType] ?? 1, Math.min(prevArea, MAX_AREA_KM2));
+    confirmed = { ..._live };
+    updateBboxDisplay();
+  }
 }
 
 document.getElementById('coaster-prev')!.addEventListener('click', (e) => { e.stopPropagation(); stepCoasterShape(-1); });
@@ -1654,6 +1709,54 @@ genBtn.onclick = generate;
 document.querySelectorAll<HTMLElement>('.merch-btn').forEach(el => el.addEventListener('click', () => selectMerch(el)));
 
 // ---------------------------------------------------------------------------
-// Return-state restore — navigating back from 3d-viewer restores the SVG view
+// Return-state restore — navigating back from 3d-print.html restores the 3D MAP
+// view (not map selection). Triggered by the hoas_return_to_3d flag set by the
+// print page's "← 3D Map" button.
 // ---------------------------------------------------------------------------
+async function restore3dMapView(pd: any): Promise<void> {
+  const bbox: BBox = { west: pd.west, south: pd.south, east: pd.east, north: pd.north };
+
+  merchType = pd.merch_type || merchType;
+  document.querySelectorAll<HTMLElement>('.merch-btn').forEach(el =>
+    el.classList.toggle('active', el.dataset.type === merchType));
+
+  if (pd.coaster_shape) {
+    const idx = COASTER_SHAPES.indexOf(pd.coaster_shape as CoasterShape);
+    if (idx !== -1) { coasterShapeIdx = idx; coasterShape = COASTER_SHAPES[idx]; }
+  }
+  if (pd.palette_overrides) restorePalette(pd.palette_overrides);
+  confirmed = bboxToRotSel(bbox);
+
+  // Blob URLs don't survive navigation — re-fetch OSM and re-render the SVG.
+  const bboxArr: [number, number, number, number] = [bbox.west, bbox.south, bbox.east, bbox.north];
+  let osm: { elements?: Record<string, unknown>[] };
+  try {
+    osm = await fetch(`/api/osm/features?${new URLSearchParams({
+      west: String(bbox.west), south: String(bbox.south),
+      east: String(bbox.east), north: String(bbox.north),
+    })}`).then(r => r.json());
+  } catch { return; }
+  _cachedOsmData = osm;
+
+  const svgEl = renderSvg({
+    osmData: osm, bbox: bboxArr, merchType, coasterShape,
+    includeLabels: true, includeBuildings: true, paletteOverrides: svgOverrides(),
+  });
+  const stl = (pd.stl_buildings_url && pd.stl_land_url && pd.stl_water_url) ? {
+    stl_buildings_url: pd.stl_buildings_url, stl_land_url: pd.stl_land_url,
+    stl_water_url: pd.stl_water_url, stl_solid_url: pd.stl_solid_url ?? null,
+  } : null;
+
+  await openSvgView(svgToBlobUrl(svgEl), svgToString(svgEl), stl);
+  // Replay the exact "View 3D" path to open the 3D map overlay on top.
+  svg3dBtn.click();
+}
+
+(function () {
+  if (localStorage.getItem('hoas_return_to_3d') !== '1') return;
+  localStorage.removeItem('hoas_return_to_3d');
+  let pd: any = null;
+  try { pd = JSON.parse(localStorage.getItem('hoas_print_data') || 'null'); } catch { /* ignore */ }
+  if (pd && pd.west != null) restore3dMapView(pd);
+})();
 

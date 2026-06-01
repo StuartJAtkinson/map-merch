@@ -45,15 +45,27 @@ PLATE_MM: dict[str, tuple[float, float]] = {
 }
 TOPOLOGY_TYPES = {'3d_print'}
 
-# Road widths in mm (for building layer — roads are structural pillars too)
-ROAD_WIDTH_MM: dict[str, float] = {
-    'motorway': 3.0, 'trunk': 2.8, 'primary': 2.5, 'secondary': 2.0,
-    'tertiary': 1.5, 'residential': 1.2, 'unclassified': 1.2, 'service': 0.8,
+# Road & waterway stroke widths — these MUST mirror frontend/cesium/src/svg-renderer.ts
+# (ROAD_W / WATERWAY_W) so the printed STL roads are IDENTICAL to the 3D-map preview.
+# Values are SVG user-units on a canvas of SVG_CANVAS_W[merch] px; they are converted to
+# plate-mm at generation time:  width_mm = svg_units * plate_w / SVG_CANVAS_W[merch].
+# The full road set is included (incl. paths) to match the map's "show everything" mode.
+SVG_ROAD_W: dict[str, float] = {
+    'motorway': 5.0, 'trunk': 4.5, 'primary': 4.0, 'secondary': 3.0,
+    'tertiary': 2.0, 'residential': 1.5, 'unclassified': 1.5,
+    'service': 1.0, 'living_street': 1.5, 'road': 1.5,
+    'footway': 0.7, 'cycleway': 0.7, 'path': 0.7,
+    'pedestrian': 1.0, 'track': 0.8, 'bridleway': 0.8, 'steps': 0.7,
+}
+SVG_WATERWAY_W: dict[str, float] = {
+    'river': 4.0, 'canal': 3.0, 'stream': 1.5, 'drain': 1.0, 'ditch': 0.8,
+}
+# SVG canvas width (px) per merch type — mirrors SVG_SPECS width_px in svg-renderer.ts.
+SVG_CANVAS_W: dict[str, float] = {
+    'placemat': 4200, 'coaster': 1000, 'tshirt': 3000,
+    'mug': 2700, 'tote': 2000, '3d_print': 800,
 }
 WATER_POLY_TAGS = {'water', 'reservoir', 'lake', 'pond', 'basin', 'lagoon'}
-WATERWAY_WIDTH_MM: dict[str, float] = {
-    'river': 4.0, 'canal': 3.0, 'stream': 1.5, 'drain': 1.0,
-}
 
 # Default height constants (mm) — all overridable via STLGenerationRequest
 # Three equal layers so the assembled coaster is flat-topped:
@@ -120,10 +132,18 @@ class STLGenerator:
         # For coasters, the plate outline may be non-rectangular
         active_shape = coaster_shape if merch_type == 'coaster' else 'square'
 
+        # Scale the SVG stroke widths (user-units) to plate-mm so printed roads/waterways
+        # match the 3D-map preview exactly (same width as a fraction of the plate).
+        svg_canvas_w = SVG_CANVAS_W.get(merch_type, 1000.0)
+        road_scale = plate_w / svg_canvas_w
+        road_widths = {hw: w * road_scale for hw, w in SVG_ROAD_W.items()}
+        waterway_widths = {ww: w * road_scale for ww, w in SVG_WATERWAY_W.items()}
+
         return self._build(
             ways, way_pts, plate_w, plate_h,
             bldg_height, water_start, water_end, land_start, land_end,
             gap_close_mm, water_expand_mm, min_bldg_mm, self._collar,
+            road_widths, waterway_widths,
             topology, elev_grid, active_shape,
         )
 
@@ -134,6 +154,7 @@ class STLGenerator:
         plate_w, plate_h,
         bldg_h, water_start, water_end, land_start, land_end,
         gap_close, water_expand, min_bldg, collar,
+        road_widths, waterway_widths,
         topology, elev_grid, coaster_shape: str = 'square',
     ) -> dict[str, BytesIO]:
 
@@ -159,8 +180,8 @@ class STLGenerator:
                 continue
 
             hw = tags.get('highway')
-            if hw in ROAD_WIDTH_MM and len(pts) >= 2:
-                poly = _buffer_line(pts, ROAD_WIDTH_MM[hw])
+            if hw in road_widths and len(pts) >= 2:
+                poly = _buffer_line(pts, road_widths[hw])
                 if poly:
                     raw_roads.append(poly)
                 continue
@@ -173,8 +194,10 @@ class STLGenerator:
                 continue
 
             ww = tags.get('waterway')
-            if ww in WATERWAY_WIDTH_MM and len(pts) >= 2:
-                poly = _buffer_line(pts, WATERWAY_WIDTH_MM[ww] + water_expand)
+            if ww in waterway_widths and len(pts) >= 2:
+                # Waterway-line stroke matches the map exactly (no extra expand —
+                # water_expand still applies to polygon water bodies above).
+                poly = _buffer_line(pts, waterway_widths[ww])
                 if poly:
                     raw_water.append(poly)
 

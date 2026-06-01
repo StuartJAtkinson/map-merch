@@ -42,13 +42,18 @@ os.makedirs(os.path.join(DATA_DIR, "stl_output"), exist_ok=True)
 async def lifespan(app: FastAPI):
     import logging
     log = logging.getLogger("startup")
+    if settings.environment == "production" and settings.secret_key == "change-me-in-production":
+        raise RuntimeError(
+            "SECRET_KEY is still the default placeholder in production — "
+            "set the SECRET_KEY environment variable."
+        )
     from app.core.database import Base
-    log.warning("DB URL driver: %s", engine.url.drivername)
-    log.warning("Metadata tables before create_all: %s", list(Base.metadata.tables.keys()))
+    log.info("DB URL driver: %s", engine.url.drivername)
+    log.info("Metadata tables before create_all: %s", list(Base.metadata.tables.keys()))
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        log.warning("create_all finished — tables now: %s", list(Base.metadata.tables.keys()))
+        log.info("create_all finished — tables now: %s", list(Base.metadata.tables.keys()))
     except Exception as exc:
         log.error("create_all FAILED: %s", exc, exc_info=True)
         raise
@@ -67,8 +72,8 @@ async def lifespan(app: FastAPI):
                     ))
                 else:
                     await conn.execute(_text(sql))
-            except Exception:
-                pass  # column already exists
+            except Exception as exc:
+                log.debug("migration for column %s skipped (likely exists): %s", col, exc)
     yield
 
 
@@ -107,8 +112,6 @@ svg_generator = SVGGenerator(MERCH_SPECS)
 stl_generator = STLGenerator()
 license_tracker = LicenseTracker()
 
-_current_bbox: dict | None = None
-
 
 @app.post("/api/osm/fetch")
 async def fetch_osm(bbox: BBox):
@@ -138,13 +141,11 @@ async def get_license_info(bbox: BBox):
 
 @app.post("/api/generate/svg")
 async def generate_svg(req: SVGGenerationRequest):
-    global _current_bbox
     try:
         osm_data = await osm_fetcher.fetch_area(req.bbox)
     except OverpassError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-    _current_bbox = req.bbox.model_dump()
     bbox_tuple = (req.bbox.west, req.bbox.south, req.bbox.east, req.bbox.north)
     loop = asyncio.get_event_loop()
     try:
@@ -165,7 +166,7 @@ async def generate_svg(req: SVGGenerationRequest):
         raise HTTPException(status_code=500, detail=f"SVG generation failed: {e}")
 
     from datetime import datetime
-    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
     filename = os.path.join(DATA_DIR, "svg_output", f"design_{timestamp}.svg")
     with open(filename, "wb") as f:
         f.write(svg_io.read())
@@ -188,13 +189,11 @@ async def save_svg(payload: dict):
 
 @app.post("/api/generate/stl")
 async def generate_stl(req: STLGenerationRequest):
-    global _current_bbox
     try:
         osm_data = await osm_fetcher.fetch_area(req.bbox, force_buildings=True)
     except OverpassError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-    _current_bbox = req.bbox.model_dump()
     bbox_tuple = (req.bbox.west, req.bbox.south, req.bbox.east, req.bbox.north)
     loop = asyncio.get_event_loop()
     try:
@@ -219,7 +218,7 @@ async def generate_stl(req: STLGenerationRequest):
         raise HTTPException(status_code=500, detail=f"STL generation failed: {e}")
 
     from datetime import datetime
-    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
     urls = {}
     for part_name, bio in parts.items():
         fname = f"design_{timestamp}_{part_name}.stl"

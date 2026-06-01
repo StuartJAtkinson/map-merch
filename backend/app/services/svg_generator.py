@@ -89,7 +89,7 @@ STYLES: dict[str, dict] = {
         'label':       '#404040',
         # feature flags
         'show_minor_roads': True,
-        'show_paths':       False,
+        'show_paths':       True,
         'show_buildings':   True,
         'show_labels':      False,
         'show_railways':    False,
@@ -129,7 +129,7 @@ STYLES: dict[str, dict] = {
         'label':       '#202020',
         # feature flags
         'show_minor_roads': True,
-        'show_paths':       False,
+        'show_paths':       True,
         'show_buildings':   True,
         'show_labels':      False,
         'show_railways':    True,

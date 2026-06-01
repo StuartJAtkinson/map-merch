@@ -22,6 +22,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
@@ -82,9 +86,9 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/refresh")
-async def refresh(refresh_token: str, db: AsyncSession = Depends(get_db)):
+async def refresh(req: RefreshRequest):
     try:
-        payload = decode_token(refresh_token)
+        payload = decode_token(req.refresh_token)
         if payload.get("type") != "refresh":
             raise ValueError
         user_id = int(payload["sub"])

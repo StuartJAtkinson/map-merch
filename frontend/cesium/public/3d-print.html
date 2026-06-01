@@ -368,7 +368,13 @@ document.getElementById('btn-print-rotate').addEventListener('click', function()
 });
 
 // ── Back button ───────────────────────────────────────────────────────────────
-document.getElementById('btn-print-back').addEventListener('click', () => history.back());
+// Return to the 3D MAP view (not map selection). We flag the SPA to rebuild the 3D
+// overlay on load, then navigate to it. history.back() can't be trusted here — the
+// SPA boots fresh and would land on map selection.
+document.getElementById('btn-print-back').addEventListener('click', () => {
+  localStorage.setItem('hoas_return_to_3d', '1');
+  window.location.href = '/index.html';
+});
 
 // ── Regenerate ────────────────────────────────────────────────────────────────
 document.getElementById('btn-print-regen').addEventListener('click', async function() {
