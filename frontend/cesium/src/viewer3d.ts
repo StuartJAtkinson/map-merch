@@ -78,6 +78,9 @@ export class Viewer3D {
   private loopRunning = false;
   private _currentScene: Viewer3DScene | null = null;
 
+  // Set by app.ts — opens the in-SPA print view (state push, no navigation).
+  onPrint: ((data: any) => void) | null = null;
+
   constructor(canvasWrap: HTMLElement) {
     this.canvasWrap = canvasWrap;
     const W = canvasWrap.clientWidth || (window.innerWidth - 272);
@@ -434,18 +437,10 @@ export class Viewer3D {
     const rBtn = this._freshBtn('btn-3d-rotate');
 
     if (is3d && hasParts) {
-      // Navigate to 3D Print page — pass data via localStorage
+      // Open the in-SPA 3D-print view (state push — no navigation, no re-pull).
       this._show('btn-3d-mode', true);
       mBtn.textContent = '🖨 3D Print →';
-      mBtn.addEventListener('click', () => {
-        localStorage.setItem('hoas_print_data', JSON.stringify({
-          west: s.west, south: s.south, east: s.east, north: s.north,
-          stl_buildings_url: stlB, stl_land_url: stlL, stl_water_url: stlW, stl_solid_url: stlS,
-          svg_url: s.svgUrl, merch_type: s.merch, coaster_shape: s.coasterShape,
-          palette_overrides: s.paletteOverrides ?? null,
-        }));
-        window.location.href = '/3d-print.html';
-      });
+      mBtn.addEventListener('click', () => this._openPrint(stlB, stlL, stlW, stlS));
     } else if (!is3d && s.svgUrl) {
       // Fabric preview toggle for 2D merch types
       this._show('btn-3d-mode', true);
@@ -492,14 +487,18 @@ export class Viewer3D {
     const btn = this._freshBtn('btn-3d-mode');
     this._show('btn-3d-mode', true);
     btn.textContent = '🖨 3D Print →';
-    btn.addEventListener('click', () => {
-      localStorage.setItem('hoas_print_data', JSON.stringify({
-        west: s.west, south: s.south, east: s.east, north: s.north,
-        stl_buildings_url: stlB, stl_land_url: stlL, stl_water_url: stlW, stl_solid_url: stlS,
-        svg_url: s.svgUrl, merch_type: s.merch, coaster_shape: s.coasterShape,
-        palette_overrides: s.paletteOverrides ?? null,
-      }));
-      window.location.href = '/3d-print.html';
+    btn.addEventListener('click', () => this._openPrint(stlB, stlL, stlW, stlS));
+  }
+
+  // Hand the current scene + STL parts to app.ts to open the in-SPA print state.
+  private _openPrint(stlB: string | null, stlL: string | null, stlW: string | null, stlS: string | null): void {
+    const s = this._currentScene;
+    if (!s) return;
+    this.onPrint?.({
+      west: s.west, south: s.south, east: s.east, north: s.north,
+      merch: s.merch, coasterShape: s.coasterShape,
+      stlBuildings: stlB, stlLand: stlL, stlWater: stlW, stlSolid: stlS,
+      paletteOverrides: s.paletteOverrides ?? null,
     });
   }
 

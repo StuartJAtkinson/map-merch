@@ -18,10 +18,15 @@ _MIRROR = "https://overpass.kumi.systems/api/interpreter"
 
 
 def _build_query(bb: str, km2: float, timeout: int, force_buildings: bool = False) -> str:
-    """Return a tiered Overpass QL query scaled to the drawn area."""
-    if km2 < 0.8:
-        # Tier 0 — very small: everything including footpaths and service roads
-        features = f"""
+    """Return a single comprehensive Overpass QL query — ALL features, no area tiering.
+
+    Area-based filtering used to scale the feature set down for larger selections. That
+    is now enforced at the frontend via a hard selection-size cap (MAX_AREA_KM2), so we
+    always fetch the complete feature set for whatever area was selected. ``km2`` and
+    ``force_buildings`` are retained for call-site compatibility but no longer alter the
+    query (buildings and every road/path class are always included).
+    """
+    features = f"""
   way["highway"]({bb});
   way["landuse"]({bb});
   way["leisure"]({bb});
@@ -32,49 +37,6 @@ def _build_query(bb: str, km2: float, timeout: int, force_buildings: bool = Fals
   relation["natural"]({bb});
   relation["landuse"]({bb});
   node["place"~"city|town|village|hamlet|suburb|neighbourhood|quarter|island"]({bb});"""
-    elif km2 < 4:
-        # Tier 1 — neighbourhood: roads ≥ service, buildings, full water/landuse
-        features = f"""
-  way["highway"~"motorway|trunk|primary|secondary|tertiary|residential|unclassified|living_street|service|road"]({bb});
-  way["landuse"]({bb});
-  way["leisure"~"park|garden|nature_reserve|common|recreation_ground|playing_fields"]({bb});
-  way["natural"~"water|wood|scrub|heath|grassland|fell|sand|beach|wetland"]({bb});
-  way["building"]({bb});
-  way["waterway"~"river|canal|stream|drain|ditch"]({bb});
-  way["railway"~"rail|tram|subway|light_rail|narrow_gauge"]({bb});
-  node["place"~"city|town|village|hamlet|suburb|neighbourhood|quarter"]({bb});"""
-    elif km2 < 15:
-        # Tier 2 — small city chunk: roads ≥ tertiary, no buildings
-        features = f"""
-  way["highway"~"motorway|trunk|primary|secondary|tertiary"]({bb});
-  way["landuse"]({bb});
-  way["leisure"~"park|garden|nature_reserve|common|recreation_ground"]({bb});
-  way["natural"~"water|wood|scrub|heath|grassland"]({bb});
-  way["waterway"~"river|canal|stream"]({bb});
-  way["railway"~"rail|subway|light_rail"]({bb});
-  node["place"~"city|town|village|hamlet|suburb"]({bb});"""
-    elif km2 < 60:
-        # Tier 3 — large town / city: primary roads+, major water, broad landuse
-        features = f"""
-  way["highway"~"motorway|trunk|primary|secondary"]({bb});
-  way["landuse"~"residential|industrial|commercial|retail|forest|farmland|meadow|grass"]({bb});
-  way["leisure"~"park|nature_reserve"]({bb});
-  way["natural"~"water|wood"]({bb});
-  way["waterway"~"river|canal"]({bb});
-  way["railway"~"rail"]({bb});
-  node["place"~"city|town|village"]({bb});"""
-    else:
-        # Tier 4 — large region: motorway/trunk/primary only
-        features = f"""
-  way["highway"~"motorway|trunk|primary"]({bb});
-  way["landuse"~"residential|industrial|forest|farmland"]({bb});
-  way["natural"~"water|wood"]({bb});
-  way["waterway"~"river|canal"]({bb});
-  node["place"~"city|town"]({bb});"""
-
-    if force_buildings and f'way["building"]({bb})' not in features:
-        features += f'\n  way["building"]({bb});'
-
     return f"[out:json][timeout:{timeout}];\n(\n{features}\n);\nout body;\n>;\nout skel qt;\n"
 
 

@@ -196,6 +196,19 @@
         #canvas-wrap-3d { flex: 1; position: relative; overflow: hidden; }
 #loading-3d { display: none; flex-direction: column; gap: 6px; padding: 8px 0; }
 
+        /* ── Inline 3D-print viewer (STL assembly) ── */
+        #viewer-print-view {
+            position: fixed; inset: 0; z-index: 9999;
+            flex-direction: row; display: none;
+            background: var(--bg-page);
+        }
+        #panel-print {
+            width: 272px; flex-shrink: 0; height: 100vh;
+            overflow-y: auto; padding: 18px 14px 24px; box-sizing: border-box;
+        }
+        #canvas-wrap-print { flex: 1; position: relative; overflow: hidden; }
+        #loading-print { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
+
         /* ── My Designs floating panel ── */
         #designs-backdrop {
             position: fixed; inset: 0; z-index: 10001;
@@ -406,6 +419,38 @@
   <div id="canvas-wrap-3d"></div>
 </div>
 
+<!-- ── Inline 3D-print viewer (STL assembly; in-SPA state, no navigation) ── -->
+<div id="viewer-print-view">
+  <div id="panel-print" class="panel">
+    <div class="sheet-handle" id="panel-print-handle"></div>
+    <button class="btn" id="btn-print-back">← 3D Map</button>
+    <h2>3D Print Preview</h2>
+    <div id="status-print" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-bottom:6px;"></div>
+    <button class="btn" id="btn-print-wire">⬡ Wireframe</button>
+    <button class="btn" id="btn-print-rotate">▶ Auto-rotate</button>
+    <div id="loading-print">
+      <div id="load-msg-print" style="font-size:11px;color:var(--text-dim);"></div>
+      <div style="height:3px;background:var(--bg-item);border-radius:2px;overflow:hidden;">
+        <div id="load-bar-print" style="height:100%;background:var(--accent);width:0%;transition:width 0.08s;border-radius:2px;"></div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="dl-label">Download print files:</div>
+    <button class="btn" id="dl-multicolour-print" style="border-color:#4a9eff;color:#4a9eff">↓ 3-colour set (buildings · land · water)</button>
+    <a class="btn" id="dl-singlecolour-print" download="buildings.stl" style="border-color:#909088;color:#b0b0a8">↓ Single colour (buildings &amp; roads)</a>
+    <div class="divider"></div>
+    <button class="btn" id="btn-print-regen" style="border-color:#4a9eff;color:#4a9eff">⟳ Regenerate STL</button>
+    <div id="regen-status-print" style="font-size:10px;color:var(--text-dim);margin-top:4px;min-height:14px;"></div>
+    <div class="divider"></div>
+    <input type="text" class="save-input" id="print-save-name" placeholder="Design name…">
+    <button class="btn" id="print-save-btn">💾 Save Design</button>
+    <div id="print-save-status" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-top:4px;"></div>
+    <div class="divider"></div>
+    <div class="user-nav-slot" data-slot="print"></div>
+  </div>
+  <div id="canvas-wrap-print"></div>
+</div>
+
 <!-- ── Inline SVG viewer (shown after generate, no page navigation) ── -->
 <div id="svg-view">
     <div id="svg-side" class="panel">
@@ -471,6 +516,7 @@
   initSheet('panel',    'panel-handle');
   initSheet('svg-side', 'svg-side-handle');
   initSheet('panel3d',  'panel3d-handle');
+  initSheet('panel-print', 'panel-print-handle');
 })();
 
 // ── SVG viewport touch pan + pinch zoom ───────────────────────────────────────
@@ -530,5 +576,13 @@
   }, { passive: true });
 })();
 </script>
+
+<!-- Persistent tool attribution — shown in-app at all times (kept out of generated files) -->
+<div class="app-status-bar">
+  Map data ©&nbsp;<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>&nbsp;contributors (ODbL)
+  ·&nbsp;Elevation:&nbsp;<a href="https://www.opentopodata.org/" target="_blank" rel="noopener">OpenTopoData</a>&nbsp;(SRTM)
+  ·&nbsp;Globe:&nbsp;<a href="https://cesium.com/" target="_blank" rel="noopener">CesiumJS</a>
+  ·&nbsp;3D:&nbsp;<a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a>
+</div>
 </body>
 </html>

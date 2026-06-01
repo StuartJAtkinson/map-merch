@@ -126,6 +126,18 @@ function selShapePoints(s: RotSel): { lon: number; lat: number }[] {
   return rotSelCorners(s);
 }
 
+// The actual rendered shape of the current selection — drives the true-area maths so the
+// 0→MAX_AREA_KM2 scale measures the real shape, not its bounding box. Circle & hexagon are
+// radial (defined by a single radius = half-height); everything else is a ratio'd rect.
+const HEX_AREA_K = 3 * Math.sqrt(3) / 2;  // regular-hexagon area = K · circumradius²
+function selShapeKind(): 'circle' | 'hexagon' | 'rect' {
+  if (merchType === 'coaster') {
+    if (coasterShape === 'circle')  return 'circle';
+    if (coasterShape === 'hexagon') return 'hexagon';
+  }
+  return 'rect';
+}
+
 function rotSelAabb(s: RotSel): BBox {
   const c = rotSelCorners(s);
   return {
@@ -144,14 +156,17 @@ function cornerOf(c: Corner, s: RotSel): { lon: number; lat: number } {
   return rotSelCorners(s)[idx];
 }
 
+// Apply the merch aspect ratio while drawing/resizing: expand the short axis to match,
+// then cap the TRUE shape area at MAX_AREA_KM2. (Switching merch/shape preserves area
+// instead — see selectMerch / stepCoasterShape, which capture the area first.)
+// selAreaKm2 and shapeForArea are hoisted function declarations defined further below.
 function enforceRatio(s: RotSel, ratio: number): RotSel {
   const cosL = Math.cos(s.cy * Math.PI / 180);
   const wM = s.hw * cosL * 111_320 * 2, hM = s.hh * 111_320 * 2;
-  if (wM / hM > ratio) {
-    return { ...s, hh: (wM / ratio) / 111_320 / 2 };
-  } else {
-    return { ...s, hw: (hM * ratio) / (cosL * 111_320) / 2 };
-  }
+  const next: RotSel = (wM / hM > ratio)
+    ? { ...s, hh: (wM / ratio) / 111_320 / 2 }
+    : { ...s, hw: (hM * ratio) / (cosL * 111_320) / 2 };
+  return selAreaKm2(next) > MAX_AREA_KM2 ? shapeForArea(next, ratio, MAX_AREA_KM2) : next;
 }
 
 // ---------------------------------------------------------------------------
@@ -404,7 +419,10 @@ function enterEditing(s: RotSel): void {
         const ratio = MERCH_RATIO[merchType] ?? 1;
         const wM = hw * cosL * 111_320, hM = hh * 111_320;
         if (wM / hM > ratio) hh = wM / ratio / 111_320; else hw = hM * ratio / (cosL * 111_320);
-        _live = { ..._live, hw, hh };
+        let next: RotSel = { ..._live, hw, hh };
+        // Hard cap: cannot resize beyond MAX_AREA_KM2 — clamp to the ratio-correct max rect.
+        if (selAreaKm2(next) > MAX_AREA_KM2) next = shapeForArea(next, ratio, MAX_AREA_KM2);
+        _live = next;
       } else if (typeof dragMode === 'object' && dragMode.kind === 'rotate' && dragRotStart) {
         const cosL = Math.cos(dragRotStart.cy * Math.PI / 180);
         const angle = Math.atan2((cur.lon - dragRotStart.cx) * cosL, cur.lat - dragRotStart.cy);
@@ -469,10 +487,34 @@ function exitEditing(): void {
 
 const MAX_AREA_KM2 = 100;
 
+// True area of the actual rendered shape (rotation-invariant), in km². Circle/hexagon use
+// their radius (= half-height); rect uses w·h. So the cap and the readout measure the real
+// shape, and circle/hex/square all cover the SAME km² at a given scale setting.
 function selAreaKm2(sel: RotSel): number {
-  const b = rotSelAabb(sel);
-  const cosLat = Math.cos((b.south + b.north) / 2 * Math.PI / 180);
-  return (b.east - b.west) * cosLat * 111.32 * (b.north - b.south) * 111.32;
+  const kind = selShapeKind();
+  const rM = sel.hh * 111_320;  // radial shapes: radius = half-height in metres
+  if (kind === 'circle')  return (Math.PI * rM * rM) / 1e6;
+  if (kind === 'hexagon') return (HEX_AREA_K * rM * rM) / 1e6;
+  const cosLat = Math.cos(sel.cy * Math.PI / 180);
+  const wM = sel.hw * cosLat * 111_320 * 2, hM = sel.hh * 111_320 * 2;
+  return (wM * hM) / 1e6;
+}
+
+// Half-dims for a selection of the given TRUE area (km²) under the current shape, at the
+// selection's latitude. The basis for the 0→MAX_AREA_KM2 scale: every shape (any rect
+// ratio, circle, hexagon) is re-derived to hit the same real area.
+function shapeForArea(sel: RotSel, ratio: number, areaKm2: number): RotSel {
+  const cosL = Math.cos(sel.cy * Math.PI / 180);
+  const areaM2 = Math.max(areaKm2, 0) * 1e6;
+  const kind = selShapeKind();
+  if (kind === 'circle' || kind === 'hexagon') {
+    // Solve radius from the shape's area formula; bounding box is a square (hw=hh in m).
+    const rM = Math.sqrt(areaM2 / (kind === 'circle' ? Math.PI : HEX_AREA_K));
+    return { ...sel, hw: rM / (cosL * 111_320), hh: rM / 111_320 };
+  }
+  const hM = Math.sqrt(areaM2 / ratio);
+  const wM = ratio * hM;
+  return { ...sel, hw: wM / 2 / (cosL * 111_320), hh: hM / 2 / 111_320 };
 }
 
 function updateBboxDisplay(): void {
@@ -525,15 +567,18 @@ function clearGeneratedState(): void {
 function selectMerch(el: HTMLElement): void {
   const newType = el.dataset.type!;
   const sameType = newType === merchType;
+  // Capture the current TRUE shape area before the merch type (and thus shape) changes.
+  const prevArea = (editState === 'editing' && _live) ? selAreaKm2(_live) : null;
   document.querySelectorAll('.merch-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
   merchType = newType;
 
   clearGeneratedState();
 
-  if (editState === 'editing' && !sameType) {
-    // Different merch: update ratio, keep existing selection
-    _live = enforceRatio(_live!, MERCH_RATIO[merchType] ?? 1);
+  if (editState === 'editing' && !sameType && prevArea !== null) {
+    // Different merch: re-shape the SAME real area under the new ratio/shape — never grow
+    // an axis. So a 100 km² placemat → a 100 km² coaster (square / circle / hexagon).
+    _live = shapeForArea(_live!, MERCH_RATIO[merchType] ?? 1, Math.min(prevArea, MAX_AREA_KM2));
     confirmed = { ..._live };
     updateBboxDisplay();
   } else {
@@ -545,7 +590,7 @@ function selectMerch(el: HTMLElement): void {
 }
 
 // ---------------------------------------------------------------------------
-// SVG-viewer layout geometry — matches fitToWindow() in svg-viewer.html
+// SVG-viewer layout geometry — landing rect for the inline SVG view transition
 // ---------------------------------------------------------------------------
 const SVG_PANEL_W = 272;
 
@@ -934,6 +979,29 @@ let svgCurrentUrl = '';
 let svgCurrentStl: any = null;
 let svgRegenTimer: ReturnType<typeof setTimeout> | null = null;
 
+// STL parts arrive from the server as base64 (never persisted server-side). We decode each
+// to an in-memory blob URL the rest of the app treats like a normal URL — STLLoader.load,
+// download anchors, etc. The blobs live for the session, so revisiting/regenerating reuses
+// them with no refetch. Old URLs are revoked on replacement to avoid leaks.
+function b64ToBlobUrl(b64: string, mime = 'model/stl'): string {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: mime }));
+}
+
+function stlRespToUrls(r: any): any {
+  if (svgCurrentStl) for (const k of ['stl_buildings_url', 'stl_land_url', 'stl_water_url', 'stl_solid_url']) {
+    if (typeof svgCurrentStl[k] === 'string' && svgCurrentStl[k].startsWith('blob:')) URL.revokeObjectURL(svgCurrentStl[k]);
+  }
+  const o: any = {};
+  if (r.stl_buildings) o.stl_buildings_url = b64ToBlobUrl(r.stl_buildings);
+  if (r.stl_land)      o.stl_land_url      = b64ToBlobUrl(r.stl_land);
+  if (r.stl_water)     o.stl_water_url     = b64ToBlobUrl(r.stl_water);
+  if (r.stl_solid)     o.stl_solid_url     = b64ToBlobUrl(r.stl_solid);
+  return o;
+}
+
 // Saved forward-transition state — used to drive the reverse animation
 let _transFrame: HTMLImageElement | null = null;
 let _transSel: ReturnType<typeof getSelAabb> = null;
@@ -1128,6 +1196,7 @@ svg3dBtn.addEventListener('click', async () => {
   if (!_viewer3d) {
     const mod = await import('./viewer3d');
     _viewer3d = new mod.Viewer3D(document.getElementById('canvas-wrap-3d')!);
+    _viewer3d.onPrint = openPrintView;
   }
 
   _viewer3d.loadScene({
@@ -1142,17 +1211,80 @@ svg3dBtn.addEventListener('click', async () => {
     stlSolid: svgCurrentStl?.stl_solid_url ?? null,
     paletteOverrides: svgOverrides(),
   });
-
-  if (svgCurrentText && svgCurrentUrl.startsWith('blob:')) {
-    fetch('/api/save-svg', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ svg_text: svgCurrentText }),
-    }).catch(() => {});
-  }
+  // (No /api/save-svg — the SVG is a client-side blob; nothing is persisted server-side.)
 });
 
 document.getElementById('btn-3d-back')!.addEventListener('click', () => {
   document.getElementById('viewer-3d-view')!.style.display = 'none';
+});
+
+// ── In-SPA 3D-print view (state push from the 3D map; back = state pop, no re-pull) ──
+let _printViewer: any = null;
+let _printScene: any = null;
+
+async function openPrintView(scene: any): Promise<void> {
+  _printScene = scene;
+  document.getElementById('viewer-print-view')!.style.display = 'flex';
+  if (!_printViewer) {
+    const mod = await import('./print-viewer');
+    _printViewer = new mod.PrintViewer(document.getElementById('canvas-wrap-print')!);
+    _printViewer.onRegen = regenPrintStl;
+  } else {
+    _printViewer.setScene(scene);
+  }
+  await _printViewer.loadScene(scene);
+}
+
+// Regenerate the STL parts for the current print scene; updates the cached URLs in place.
+async function regenPrintStl(): Promise<void> {
+  if (!_printScene) return;
+  const { west, south, east, north, merch, coasterShape } = _printScene;
+  const r = await fetch('/api/generate/stl', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bbox: { west, south, east, north }, merch_type: merch, coaster_shape: coasterShape }),
+  });
+  if (!r.ok) throw new Error(`Server ${r.status}`);
+  const res = await r.json();
+  for (const [field, key] of [['stlBuildings', 'stl_buildings'], ['stlLand', 'stl_land'],
+                              ['stlWater', 'stl_water'], ['stlSolid', 'stl_solid']] as const) {
+    const cur = _printScene[field];
+    if (typeof cur === 'string' && cur.startsWith('blob:')) URL.revokeObjectURL(cur);
+    _printScene[field] = res[key] ? b64ToBlobUrl(res[key]) : null;
+  }
+  _printViewer?.setScene(_printScene);
+}
+
+document.getElementById('btn-print-back')!.addEventListener('click', () => {
+  // State pop — hide the print overlay, revealing the 3D map underneath. No re-pull.
+  document.getElementById('viewer-print-view')!.style.display = 'none';
+});
+
+document.getElementById('print-save-btn')!.addEventListener('click', async () => {
+  const token = localStorage.getItem('hoas_token');
+  if (!token) { location.href = '/login.html?returnTo=' + encodeURIComponent(location.href); return; }
+  const nameEl = document.getElementById('print-save-name') as HTMLInputElement;
+  const statusEl = document.getElementById('print-save-status')!;
+  const s = _printScene;
+  if (!s) return;
+  const name = nameEl.value.trim() || `${s.merch || 'design'} — ${new Date().toLocaleDateString('en-GB')}`;
+  statusEl.textContent = 'Saving…';
+  const thumbnail = _printViewer?.getSnapshot(150) ?? null;
+  try {
+    const resp = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({
+        name, merch_type: s.merch,
+        bbox_west: s.west, bbox_south: s.south, bbox_east: s.east, bbox_north: s.north,
+        coaster_shape: s.coasterShape, palette_overrides: s.paletteOverrides ?? null,
+        thumbnail_data_url: thumbnail,
+      }),
+    });
+    if (resp.status === 401) { localStorage.removeItem('hoas_token'); location.href = '/login.html'; return; }
+    if (!resp.ok) throw new Error(`Server ${resp.status}`);
+    statusEl.textContent = 'Saved!';
+    setTimeout(() => { statusEl.textContent = ''; }, 2500);
+  } catch (e: any) { statusEl.textContent = `Error: ${e.message}`; }
 });
 
 // Pan/zoom on SVG viewport
@@ -1209,7 +1341,8 @@ async function generate(): Promise<void> {
   const _t0 = performance.now();
   const _cosLat = Math.cos((bbox.south + bbox.north) / 2 * Math.PI / 180);
   const _km2 = Math.round((bbox.east - bbox.west) * _cosLat * 111.32 * (bbox.north - bbox.south) * 111.32 * 100) / 100;
-  if (_km2 > MAX_AREA_KM2) { clearGeneratedState(); return; }
+  // Guard on TRUE selection area (rotation-invariant), matching the selector's hard cap.
+  if (selAreaKm2(confirmed) > MAX_AREA_KM2) { clearGeneratedState(); return; }
   const _area = `km2=${_km2}`;
   tPost('generate_start', 0, _area);
 
@@ -1263,7 +1396,7 @@ const abort = new AbortController();
   osmP.then(() => {
     fetchJson('/api/generate/stl', {
       bbox, merch_type: merchType, coaster_shape: coasterShape,
-    }).then((r: any) => { svgCurrentStl = r; onStlReady(); }).catch(() => { /* ignore */ });
+    }).then((r: any) => { svgCurrentStl = stlRespToUrls(r); onStlReady(); }).catch(() => { /* ignore */ });
   }).catch(() => { /* osmP already handles its own error */ });
 
   // Estimate runs in background — updates status bar and refines progress bar when it resolves.
@@ -1311,10 +1444,19 @@ const abort = new AbortController();
 // Coaster shape cycling
 // ---------------------------------------------------------------------------
 function stepCoasterShape(dir: 1 | -1): void {
+  // Capture the real area before the shape changes so we can preserve it after.
+  const prevArea = (editState === 'editing' && _live) ? selAreaKm2(_live) : null;
   coasterShapeIdx = (coasterShapeIdx + dir + COASTER_SHAPES.length) % COASTER_SHAPES.length;
   coasterShape = COASTER_SHAPES[coasterShapeIdx];
   document.getElementById('coaster-icon')!.textContent  = COASTER_ICONS[coasterShape];
   document.getElementById('coaster-shape-label')!.textContent = COASTER_LABELS[coasterShape];
+  // Re-derive geometry so the new shape covers the SAME real km² (square↔circle↔hexagon
+  // all cover equal area at a given scale; the bounding box grows/shrinks to suit).
+  if (prevArea !== null) {
+    _live = shapeForArea(_live!, MERCH_RATIO[merchType] ?? 1, Math.min(prevArea, MAX_AREA_KM2));
+    confirmed = { ..._live };
+    updateBboxDisplay();
+  }
 }
 
 document.getElementById('coaster-prev')!.addEventListener('click', (e) => { e.stopPropagation(); stepCoasterShape(-1); });
@@ -1653,7 +1795,22 @@ async function loadDesign(project: any): Promise<void> {
 genBtn.onclick = generate;
 document.querySelectorAll<HTMLElement>('.merch-btn').forEach(el => el.addEventListener('click', () => selectMerch(el)));
 
-// ---------------------------------------------------------------------------
-// Return-state restore — navigating back from 3d-viewer restores the SVG view
-// ---------------------------------------------------------------------------
+// (The old hoas_return_to_3d restore shim is gone: the 3D-print view is now an in-SPA
+// overlay state, so "back" is a state pop with no navigation and no re-pull.)
+
+// Deep-link: /index.html?design=<id> (used by the dashboard "Open" button) loads that
+// saved design straight into the SPA — fetch the config, then loadDesign regenerates it.
+(function () {
+  const id = new URLSearchParams(location.search).get('design');
+  if (!id) return;
+  const token = localStorage.getItem('hoas_token');
+  if (!token) return;
+  fetch('/api/projects', { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => r.ok ? r.json() : [])
+    .then((projects: any[]) => {
+      const p = projects.find(x => String(x.id) === id);
+      if (p) loadDesign(p);
+    })
+    .catch(() => { /* ignore — user can still draw a fresh selection */ });
+})();
 

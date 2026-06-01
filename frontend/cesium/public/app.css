@@ -255,6 +255,31 @@ body {
   .hint         { display: none; }
 }
 
+/* ── Status bar (persistent tool attribution, always on) ──────────────────── */
+.app-status-bar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-dim);
+  background: rgba(8, 8, 14, 0.92);
+  border-top: 1px solid var(--border-dim);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10000;
+  pointer-events: none;            /* never block map / canvas interaction */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-status-bar a { color: var(--text-muted); text-decoration: none; pointer-events: auto; }
+.app-status-bar a:hover { color: var(--accent); }
+
 /* ── Spinner ────────────────────────────────────────────────────────────────── */
 .spinner {
   display: none;

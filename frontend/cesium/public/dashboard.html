@@ -155,8 +155,8 @@ async function loadProjects() {
   grid.innerHTML = projects.map(p => {
     const date = new Date(p.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     const emoji = MERCH_EMOJI[p.merch_type] || '🗺';
-    const thumb = p.svg_url
-      ? `<img src="${p.svg_url}" alt="design thumbnail" loading="lazy">`
+    const thumb = p.thumbnail_data_url
+      ? `<img src="${p.thumbnail_data_url}" alt="design thumbnail" loading="lazy">`
       : `<span class="no-thumb">${emoji}</span>`;
     return `
       <div class="project-card" data-id="${p.id}">
@@ -167,24 +167,11 @@ async function loadProjects() {
           ${date}
         </div>
         <div class="card-actions">
-          ${p.svg_url ? `<a class="btn" href="/svg-viewer.html?${buildViewerParams(p)}" target="_blank">Open</a>` : '<span class="btn" style="opacity:.4;cursor:default">No SVG</span>'}
+          <a class="btn" href="/index.html?design=${p.id}">Open</a>
           <button class="btn-danger" onclick="deleteProject(${p.id}, this)">Delete</button>
         </div>
       </div>`;
   }).join('');
-}
-
-function buildViewerParams(p) {
-  const q = new URLSearchParams({
-    svg: p.svg_url,
-    west: p.bbox.west, south: p.bbox.south,
-    east: p.bbox.east, north: p.bbox.north,
-    merch: p.merch_type,
-  });
-  if (p.stl_buildings_url) q.set('stl_buildings', p.stl_buildings_url);
-  if (p.stl_land_url)      q.set('stl_land',      p.stl_land_url);
-  if (p.stl_water_url)     q.set('stl_water',     p.stl_water_url);
-  return q.toString();
 }
 
 async function deleteProject(id, btn) {

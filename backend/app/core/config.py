@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
 
     # App
+    environment: str = "development"  # set ENVIRONMENT=production in deploys
     secret_key: str = "change-me-in-production"
     port: str = "8080"
     data_dir: str = "/app/data"

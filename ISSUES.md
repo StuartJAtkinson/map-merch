@@ -3,8 +3,24 @@
 ## Open
 
 - [ ] **Local dev: port 8000 blocked by WSL SSH tunnel** — `ssh` process in Ubuntu WSL binds 127.0.0.1:8000 preventing Docker backend from being reached via `localhost:8000`; only affects Vite dev-server workflow; `--profile full` (nginx) unaffected as it uses internal Docker network. Kill tunnel or temporarily remap docker-compose port *(found 2026-05-28)*
+- [ ] **Coaster shape not enforced across all 3D** — square/circle/hexagon is applied to the SVG clip and the STL plate outline (`_plate_shapes`), but the 3D-MAP ground (`viewer3d.ts` — `PlaneGeometry` + 4 axis-aligned clip planes) and the PRINT baseplate (`print-viewer.ts` — `BoxGeometry`) are always rectangular. A circle/hexagon coaster shows a rectangular ground in the 3D map and a rectangular baseplate in the print preview. Conform both to the selected shape. *(found 2026-06-01)*
+- [ ] **No server-side bbox-area cap** — backend `/api/generate/svg` (+stl/osm) accepts any bbox; only the frontend enforces `MAX_AREA_KM2`. A huge bbox ties the server up ~2 min (Overpass 60s primary + 60s mirror) and makes `test_generate_svg__bbox_too_large` flaky (client `ReadTimeout` > 120s). Add an area guard that 422s oversized bboxes before fetching. Resource/DoS concern. *(found 2026-06-01)*
 
-## Open
+## Resolved (2026-06-01 session)
+
+- [x] **CI smoke tests all fail — `aiosqlite` missing** — CI sets no `DATABASE_URL`, so the backend falls back to its default `sqlite+aiosqlite://` driver, but `aiosqlite` wasn't in `requirements.txt`; the server failed to start (`ModuleNotFoundError`) and all 18 smoke tests errored with connection-refused. Pre-existing (Docker uses Postgres/asyncpg locally so it was masked). Added `aiosqlite>=0.20.0`. *(resolved 2026-06-01)*
+
+- [x] **Dead duplicate app `endpoints.py`** (GH #14) — deleted the orphaned 131-line second FastAPI app; nothing imported it *(resolved 2026-06-01)*
+- [x] **SQLite db + `data/` not gitignored** (GH #15) — added `/data/` and `*.db` to `.gitignore` *(resolved 2026-06-01)*
+- [x] **Dead code: `_current_bbox` global + unused schemas** (GH #17) — removed `_current_bbox` (def + 2 globals + 2 writes) from router.py; deleted unused `MerchType`/`DesignProjectCreate`/`DesignProjectResponse` and their now-orphaned `datetime`/`Optional` imports from schemas.py *(resolved 2026-06-01)*
+- [x] **Startup logs at WARNING + silent migration except** (GH #18) — demoted routine startup logs `warning→info`; migration `except` now logs at `debug` instead of silent `pass` *(resolved 2026-06-01)*
+- [x] **Refresh token passed as query param** (GH #11) — `refresh()` now takes a `RefreshRequest` body model; old query-param form returns 422 *(resolved 2026-06-01)*
+- [x] **No SECRET_KEY guard** (GH #13) — added `environment` setting; lifespan raises if `ENVIRONMENT=production` and key is still the placeholder (dev/test/CI use default `development`, unaffected) *(resolved 2026-06-01)*
+- [x] **Output filename collisions** (GH #16) — `generate_svg`/`generate_stl` now timestamp at microsecond granularity (`%f`), matching `save_svg` *(resolved 2026-06-01)*
+- [x] **CORS wildcard + credentials in Cloud Run deploy** (GH #12) — `ci.yml` no longer defaults `CORS_ORIGINS` to `*` (now the real custom domain); also sets `ENVIRONMENT=production` to activate the SECRET_KEY guard *(resolved 2026-06-01)*
+
+- [x] **3D print roads insanely big vs 3D map** — STL had its own `ROAD_WIDTH_MM` (motorway 3.0mm) ~6× wider than the 3D-map SVG (`svg-renderer.ts` `ROAD_W` motorway 5px/1000px ≈ 0.48mm on a 95mm coaster); fat buffers merged and destroyed adjacent roads. Removed the divergent STL table; STL now mirrors `svg-renderer.ts` `ROAD_W`/`WATERWAY_W` scaled by `plate_mm / canvas_px`, so printed roads are identical to the map. Dropped the extra `water_expand` on waterway lines (kept it for polygon water). *(resolved 2026-06-01)*
+- [x] **"← 3D Map" button went to map selection** — `3d-print.html` used `history.back()`, which boots the SPA fresh at map selection. Now sets `hoas_return_to_3d` flag and navigates to `/index.html`; implemented the previously-stubbed restore in `app.ts` (`restore3dMapView`) that rebuilds state from `hoas_print_data`, re-fetches OSM, re-renders the SVG, and replays the exact View-3D path. *(resolved 2026-06-01)*
 
 ## Resolved (2026-05-30 session)
 

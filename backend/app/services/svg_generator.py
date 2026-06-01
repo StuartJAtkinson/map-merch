@@ -89,7 +89,7 @@ STYLES: dict[str, dict] = {
         'label':       '#404040',
         # feature flags
         'show_minor_roads': True,
-        'show_paths':       False,
+        'show_paths':       True,
         'show_buildings':   True,
         'show_labels':      False,
         'show_railways':    False,
@@ -129,7 +129,7 @@ STYLES: dict[str, dict] = {
         'label':       '#202020',
         # feature flags
         'show_minor_roads': True,
-        'show_paths':       False,
+        'show_paths':       True,
         'show_buildings':   True,
         'show_labels':      False,
         'show_railways':    True,
@@ -178,10 +178,6 @@ class SVGGenerator:
 
         svg = svgwrite.Drawing(size=(str(self._svg_w), str(self._svg_h)))
 
-        # Background behind clip region
-        svg.add(svg.rect(insert=(0, 0), size=(self._svg_w, self._svg_h),
-                         fill=palette['background']))
-
         # Hard clip — shape depends on merch type and coaster_shape setting.
         clip = svg.defs.add(svg.clipPath(id='map-clip'))
         if merch_type == 'coaster' and coaster_shape == 'circle':
@@ -192,6 +188,11 @@ class SVGGenerator:
         else:
             clip.add(svg.rect(insert=(0, 0), size=(self._svg_w, self._svg_h)))
         self._g = svg.add(svg.g(clip_path='url(#map-clip)'))
+
+        # Background lives INSIDE the clip group so circle/hexagon shapes are transparent
+        # outside the shape (alpha corners), not filled to the square canvas edges.
+        self._g.add(svg.rect(insert=(0, 0), size=(self._svg_w, self._svg_h),
+                             fill=palette['background']))
 
         # Draw order: land → water → buildings → roads → railways → labels
         if include_parks:
@@ -211,8 +212,7 @@ class SVGGenerator:
         if include_labels and palette['show_labels']:
             self._draw_labels(svg, palette)
 
-        # Attribution sits outside the clip group (always fully visible)
-        self._draw_attribution(svg)
+        # Attribution is shown in the app status bar, not baked into generated files.
 
         sio = StringIO()
         svg.write(sio)
@@ -432,11 +432,3 @@ class SVGGenerator:
                 font_family='Arial, sans-serif',
                 text_anchor='middle',
             ))
-
-    def _draw_attribution(self, svg: svgwrite.Drawing) -> None:
-        svg.add(svg.text(
-            '© OpenStreetMap contributors (ODbL)',
-            insert=(10, self._svg_h - 10),
-            font_size='11', fill='#888888',
-            font_family='Arial, sans-serif',
-        ))

@@ -86,8 +86,9 @@ def test_svg_generation__all_merch_types(client, merch_type):
     })
     assert r.status_code == 200, r.text
     data = r.json()
-    assert "svg_url" in data
-    assert data["svg_url"].startswith("/output/svg_output/")
+    # SVG is streamed inline (not persisted server-side).
+    assert "svg" in data
+    assert data["svg"].lstrip().startswith("<")
     assert data["merch_type"] == merch_type
 
 
@@ -100,7 +101,7 @@ def test_svg_generation__all_styles(client, style):
         "style": style,
     })
     assert r.status_code == 200, r.text
-    assert "svg_url" in r.json()
+    assert "svg" in r.json()
 
 
 # ── STL generation ─────────────────────────────────────────────────────────────
@@ -123,11 +124,11 @@ def test_stl_generation__all_merch_types(client, merch_type):
     })
     assert r.status_code == 200, r.text
     data = r.json()
-    # Three interlocking pieces: land (green lid), water (blue disc), buildings (grey base)
+    # Three interlocking pieces streamed inline as base64 (land lid, water disc, buildings base)
     for part in ("buildings", "water", "land"):
-        key = f"stl_{part}_url"
+        key = f"stl_{part}"
         assert key in data, f"Missing {key} in {data.keys()}"
-        assert data[key].startswith("/output/stl_output/")
+        assert len(data[key]) > 0, f"Empty {key}"
 
 
 # ── OSM proxy ─────────────────────────────────────────────────────────────────
