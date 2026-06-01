@@ -437,5 +437,11 @@ not navigation** (no re-pull).
    attribution removed from generated files (svg-renderer.ts + svg_generator.py) + circle/hex
    background clipped to the shape (transparent corners). *(2026-06-01)*
 3. 📋 Extract shared components (sidebar shell, loading bar, save, user-nav, mobile sheet); de-dup IDs.
-4. 📋 Fold `3d-print.html` into the SPA as `print3d`; re-point dashboard "Open" into SPA; delete `svg-viewer.html`.
+   (Largely shrunk now 3d-print is folded in — remaining work is in-SPA dedup only.)
+4. 🔄 Fold print view into the SPA:
+   - ✅ `print-viewer.ts` (`PrintViewer`) + `#viewer-print-view` overlay in index.html; the 3D-map
+     "🖨 3D Print →" button now pushes an in-SPA state via `Viewer3D.onPrint` → `openPrintView`
+     (no navigation). "← 3D Map" = state pop (no re-pull). Old `hoas_return_to_3d` shim removed.
+     `3d-print.html` deleted. *(2026-06-01)*
+   - 📋 Re-point dashboard "Open" into the SPA, then delete `svg-viewer.html`.
 5. 📋 Client pipeline cache + stop server-side file persistence (reversibility / embeddable payoff).

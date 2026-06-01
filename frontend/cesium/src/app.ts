@@ -1173,6 +1173,7 @@ svg3dBtn.addEventListener('click', async () => {
   if (!_viewer3d) {
     const mod = await import('./viewer3d');
     _viewer3d = new mod.Viewer3D(document.getElementById('canvas-wrap-3d')!);
+    _viewer3d.onPrint = openPrintView;
   }
 
   _viewer3d.loadScene({
@@ -1198,6 +1199,73 @@ svg3dBtn.addEventListener('click', async () => {
 
 document.getElementById('btn-3d-back')!.addEventListener('click', () => {
   document.getElementById('viewer-3d-view')!.style.display = 'none';
+});
+
+// ── In-SPA 3D-print view (state push from the 3D map; back = state pop, no re-pull) ──
+let _printViewer: any = null;
+let _printScene: any = null;
+
+async function openPrintView(scene: any): Promise<void> {
+  _printScene = scene;
+  document.getElementById('viewer-print-view')!.style.display = 'flex';
+  if (!_printViewer) {
+    const mod = await import('./print-viewer');
+    _printViewer = new mod.PrintViewer(document.getElementById('canvas-wrap-print')!);
+    _printViewer.onRegen = regenPrintStl;
+  } else {
+    _printViewer.setScene(scene);
+  }
+  await _printViewer.loadScene(scene);
+}
+
+// Regenerate the STL parts for the current print scene; updates the cached URLs in place.
+async function regenPrintStl(): Promise<void> {
+  if (!_printScene) return;
+  const { west, south, east, north, merch, coasterShape } = _printScene;
+  const r = await fetch('/api/generate/stl', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bbox: { west, south, east, north }, merch_type: merch, coaster_shape: coasterShape }),
+  });
+  if (!r.ok) throw new Error(`Server ${r.status}`);
+  const res = await r.json();
+  _printScene.stlBuildings = res.stl_buildings_url;
+  _printScene.stlLand = res.stl_land_url;
+  _printScene.stlWater = res.stl_water_url;
+  _printScene.stlSolid = res.stl_solid_url ?? null;
+  _printViewer?.setScene(_printScene);
+}
+
+document.getElementById('btn-print-back')!.addEventListener('click', () => {
+  // State pop — hide the print overlay, revealing the 3D map underneath. No re-pull.
+  document.getElementById('viewer-print-view')!.style.display = 'none';
+});
+
+document.getElementById('print-save-btn')!.addEventListener('click', async () => {
+  const token = localStorage.getItem('hoas_token');
+  if (!token) { location.href = '/login.html?returnTo=' + encodeURIComponent(location.href); return; }
+  const nameEl = document.getElementById('print-save-name') as HTMLInputElement;
+  const statusEl = document.getElementById('print-save-status')!;
+  const s = _printScene;
+  if (!s) return;
+  const name = nameEl.value.trim() || `${s.merch || 'design'} — ${new Date().toLocaleDateString('en-GB')}`;
+  statusEl.textContent = 'Saving…';
+  const thumbnail = _printViewer?.getSnapshot(150) ?? null;
+  try {
+    const resp = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({
+        name, merch_type: s.merch,
+        bbox_west: s.west, bbox_south: s.south, bbox_east: s.east, bbox_north: s.north,
+        coaster_shape: s.coasterShape, palette_overrides: s.paletteOverrides ?? null,
+        thumbnail_data_url: thumbnail,
+      }),
+    });
+    if (resp.status === 401) { localStorage.removeItem('hoas_token'); location.href = '/login.html'; return; }
+    if (!resp.ok) throw new Error(`Server ${resp.status}`);
+    statusEl.textContent = 'Saved!';
+    setTimeout(() => { statusEl.textContent = ''; }, 2500);
+  } catch (e: any) { statusEl.textContent = `Error: ${e.message}`; }
 });
 
 // Pan/zoom on SVG viewport
@@ -1708,55 +1776,6 @@ async function loadDesign(project: any): Promise<void> {
 genBtn.onclick = generate;
 document.querySelectorAll<HTMLElement>('.merch-btn').forEach(el => el.addEventListener('click', () => selectMerch(el)));
 
-// ---------------------------------------------------------------------------
-// Return-state restore — navigating back from 3d-print.html restores the 3D MAP
-// view (not map selection). Triggered by the hoas_return_to_3d flag set by the
-// print page's "← 3D Map" button.
-// ---------------------------------------------------------------------------
-async function restore3dMapView(pd: any): Promise<void> {
-  const bbox: BBox = { west: pd.west, south: pd.south, east: pd.east, north: pd.north };
-
-  merchType = pd.merch_type || merchType;
-  document.querySelectorAll<HTMLElement>('.merch-btn').forEach(el =>
-    el.classList.toggle('active', el.dataset.type === merchType));
-
-  if (pd.coaster_shape) {
-    const idx = COASTER_SHAPES.indexOf(pd.coaster_shape as CoasterShape);
-    if (idx !== -1) { coasterShapeIdx = idx; coasterShape = COASTER_SHAPES[idx]; }
-  }
-  if (pd.palette_overrides) restorePalette(pd.palette_overrides);
-  confirmed = bboxToRotSel(bbox);
-
-  // Blob URLs don't survive navigation — re-fetch OSM and re-render the SVG.
-  const bboxArr: [number, number, number, number] = [bbox.west, bbox.south, bbox.east, bbox.north];
-  let osm: { elements?: Record<string, unknown>[] };
-  try {
-    osm = await fetch(`/api/osm/features?${new URLSearchParams({
-      west: String(bbox.west), south: String(bbox.south),
-      east: String(bbox.east), north: String(bbox.north),
-    })}`).then(r => r.json());
-  } catch { return; }
-  _cachedOsmData = osm;
-
-  const svgEl = renderSvg({
-    osmData: osm, bbox: bboxArr, merchType, coasterShape,
-    includeLabels: true, includeBuildings: true, paletteOverrides: svgOverrides(),
-  });
-  const stl = (pd.stl_buildings_url && pd.stl_land_url && pd.stl_water_url) ? {
-    stl_buildings_url: pd.stl_buildings_url, stl_land_url: pd.stl_land_url,
-    stl_water_url: pd.stl_water_url, stl_solid_url: pd.stl_solid_url ?? null,
-  } : null;
-
-  await openSvgView(svgToBlobUrl(svgEl), svgToString(svgEl), stl);
-  // Replay the exact "View 3D" path to open the 3D map overlay on top.
-  svg3dBtn.click();
-}
-
-(function () {
-  if (localStorage.getItem('hoas_return_to_3d') !== '1') return;
-  localStorage.removeItem('hoas_return_to_3d');
-  let pd: any = null;
-  try { pd = JSON.parse(localStorage.getItem('hoas_print_data') || 'null'); } catch { /* ignore */ }
-  if (pd && pd.west != null) restore3dMapView(pd);
-})();
+// (The old hoas_return_to_3d restore shim is gone: the 3D-print view is now an in-SPA
+// overlay state, so "back" is a state pop with no navigation and no re-pull.)
 
