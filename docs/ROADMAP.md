@@ -443,5 +443,12 @@ not navigation** (no re-pull).
      "🖨 3D Print →" button now pushes an in-SPA state via `Viewer3D.onPrint` → `openPrintView`
      (no navigation). "← 3D Map" = state pop (no re-pull). Old `hoas_return_to_3d` shim removed.
      `3d-print.html` deleted. *(2026-06-01)*
-   - 📋 Re-point dashboard "Open" into the SPA, then delete `svg-viewer.html`.
+   - ✅ Dashboard "Open" re-pointed to `/index.html?design=<id>` (SPA loads it via `loadDesign`);
+     dashboard thumbnail fixed to use `thumbnail_data_url`. `svg-viewer.html` deleted. The
+     dashboard↔svg-viewer pair was an orphaned legacy island — the SPA's in-app "My Designs"
+     panel already replaced it. *(2026-06-01)*
 5. 📋 Client pipeline cache + stop server-side file persistence (reversibility / embeddable payoff).
+
+**Remaining legacy:** `dashboard.html` kept as a standalone gallery (Open now routes into the
+SPA); could later fold into the in-app "My Designs" panel entirely. `landing.html` + `login.html`
+remain as separate entry pages by design.
