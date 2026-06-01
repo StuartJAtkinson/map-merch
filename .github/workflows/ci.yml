@@ -225,7 +225,7 @@ jobs:
 
       - name: Deploy backend
         id: deploy-backend
-        uses: google-github-actions/deploy-cloudrun@v2
+        uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: hoas-backend
           region: ${{ env.REGION }}
@@ -246,7 +246,7 @@ jobs:
 
       - name: Deploy frontend
         id: deploy-frontend
-        uses: google-github-actions/deploy-cloudrun@v2
+        uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: hoas-frontend
           region: ${{ env.REGION }}
