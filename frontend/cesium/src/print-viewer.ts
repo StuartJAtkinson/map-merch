@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { Status } from './status';
 
 // In-SPA 3D-print preview (the 3-piece STL assembly). Ported from the old standalone
 // 3d-print.html so the print view is a state inside the SPA — opening it is an overlay,
@@ -143,40 +144,37 @@ export class PrintViewer {
 
     this._startLoop();
 
-    const loadMsg = this._el('load-msg-print');
-    const loadBar = this._el('load-bar-print');
     const statusEl = this._el('status-print');
-    this._show('loading-print', true);
+    // Generation progress now lives in the global bottom strip.
+    Status.begin('Loading STL…');
 
     if (!(s.stlBuildings && s.stlLand && s.stlWater)) {
       if (statusEl) statusEl.textContent = 'No STL data yet — generate first.';
-      this._show('loading-print', false);
+      Status.done();
       this._wireControls();
       return;
     }
 
-    if (loadMsg) loadMsg.textContent = 'Loading STL files…';
+    Status.message('Loading STL files…');
     const barStart = performance.now(), barDur = 3200;
+    let barActive = true;
     const barLoop = (now: number) => {
       const t = Math.min(1, (now - barStart) / barDur);
-      if (loadBar) loadBar.style.width = (t * 97).toFixed(1) + '%';
-      if (t < 1 && this._el('loading-print')?.style.display !== 'none') requestAnimationFrame(barLoop);
+      Status.set(t * 0.97);
+      if (t < 1 && barActive) requestAnimationFrame(barLoop);
     };
     barLoop(performance.now());
 
     try {
       await this._loadParts(s.stlBuildings, s.stlLand, s.stlWater);
-      if (loadMsg) loadMsg.textContent = 'Assembling layers…';
+      Status.message('Assembling layers…');
       await this._runAnim();
-      if (loadBar) loadBar.style.width = '100%';
-      const loadEl = this._el('loading-print');
-      if (loadEl) {
-        loadEl.style.transition = 'opacity 0.3s'; loadEl.style.opacity = '0';
-        setTimeout(() => { loadEl.style.display = 'none'; loadEl.style.opacity = '1'; loadEl.style.transition = ''; }, 350);
-      }
+      barActive = false;
+      Status.set(1); Status.done();
     } catch (e: any) {
+      barActive = false;
+      Status.done();
       if (statusEl) statusEl.textContent = 'Failed to load STL: ' + e.message;
-      this._show('loading-print', false);
     }
 
     this._wireControls();
@@ -335,7 +333,6 @@ export class PrintViewer {
   }
 
   private _el(id: string): HTMLElement { return document.getElementById(id) as HTMLElement; }
-  private _show(id: string, v: boolean): void { const el = document.getElementById(id); if (el) el.style.display = v ? '' : 'none'; }
   private _freshBtn(id: string): HTMLElement {
     const old = document.getElementById(id)!;
     const n = old.cloneNode(true) as HTMLElement;

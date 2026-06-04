@@ -395,6 +395,7 @@
 <div id="viewer-3d-view">
   <div id="panel3d" class="panel">
     <div class="sheet-handle" id="panel3d-handle"></div>
+    <!-- Canonical panel order: Back → Title → Info → Toggles → divider → Save → divider → Nav -->
     <button class="btn" id="btn-3d-back">← SVG View</button>
     <h2>3D Preview</h2>
     <div id="status-3d" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-bottom:4px;"></div>
@@ -403,16 +404,12 @@
     <button class="btn" id="btn-3d-mode" style="display:none"></button>
     <button class="btn" id="btn-3d-wire">⬡ Wireframe</button>
     <button class="btn" id="btn-3d-rotate">▶ Auto-rotate</button>
-    <div id="loading-3d">
-      <div id="load-msg-3d" style="font-size:11px;color:var(--text-dim);"></div>
-      <div style="height:3px;background:var(--bg-item);border-radius:2px;overflow:hidden;">
-        <div id="load-bar-3d" style="height:100%;background:var(--accent);width:0%;transition:width 0.08s;border-radius:2px;"></div>
-      </div>
-    </div>
     <div class="divider"></div>
-    <input type="text" class="save-input" id="stl-save-name" placeholder="Design name…">
-    <button class="btn" id="stl-save-btn">💾 Save Design</button>
-    <div id="stl-save-status" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-top:4px;"></div>
+    <div class="save-section">
+      <div class="save-name-preview" id="stl-save-name-preview"></div>
+      <button class="btn" id="stl-save-btn">💾 Save Design</button>
+      <div id="stl-save-status" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-top:4px;"></div>
+    </div>
     <div class="divider"></div>
     <div class="user-nav-slot" data-slot="3d"></div>
   </div>
@@ -423,17 +420,12 @@
 <div id="viewer-print-view">
   <div id="panel-print" class="panel">
     <div class="sheet-handle" id="panel-print-handle"></div>
+    <!-- Canonical panel order: Back → Title → Info → Toggles → Downloads → Secondary → divider → Save → divider → Nav -->
     <button class="btn" id="btn-print-back">← 3D Map</button>
     <h2>3D Print Preview</h2>
     <div id="status-print" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-bottom:6px;"></div>
     <button class="btn" id="btn-print-wire">⬡ Wireframe</button>
     <button class="btn" id="btn-print-rotate">▶ Auto-rotate</button>
-    <div id="loading-print">
-      <div id="load-msg-print" style="font-size:11px;color:var(--text-dim);"></div>
-      <div style="height:3px;background:var(--bg-item);border-radius:2px;overflow:hidden;">
-        <div id="load-bar-print" style="height:100%;background:var(--accent);width:0%;transition:width 0.08s;border-radius:2px;"></div>
-      </div>
-    </div>
     <div class="divider"></div>
     <div class="dl-label">Download print files:</div>
     <button class="btn" id="dl-multicolour-print" style="border-color:#4a9eff;color:#4a9eff">↓ 3-colour set (buildings · land · water)</button>
@@ -442,9 +434,11 @@
     <button class="btn" id="btn-print-regen" style="border-color:#4a9eff;color:#4a9eff">⟳ Regenerate STL</button>
     <div id="regen-status-print" style="font-size:10px;color:var(--text-dim);margin-top:4px;min-height:14px;"></div>
     <div class="divider"></div>
-    <input type="text" class="save-input" id="print-save-name" placeholder="Design name…">
-    <button class="btn" id="print-save-btn">💾 Save Design</button>
-    <div id="print-save-status" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-top:4px;"></div>
+    <div class="save-section">
+      <div class="save-name-preview" id="print-save-name-preview"></div>
+      <button class="btn" id="print-save-btn">💾 Save Design</button>
+      <div id="print-save-status" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-top:4px;"></div>
+    </div>
     <div class="divider"></div>
     <div class="user-nav-slot" data-slot="print"></div>
   </div>
@@ -472,8 +466,8 @@
 <div class="divider"></div>
         <div class="hint">Scroll — zoom<br>Left drag — pan</div>
         <div class="divider"></div>
-        <div id="svg-save-section">
-            <input type="text" class="save-input" id="svg-save-name" placeholder="Design name…">
+        <div id="svg-save-section" class="save-section">
+            <div class="save-name-preview" id="svg-save-name-preview"></div>
             <button class="btn" id="svg-save-btn">💾 Save Design</button>
             <div id="svg-save-status"></div>
         </div>
@@ -577,12 +571,17 @@
 })();
 </script>
 
-<!-- Persistent tool attribution — shown in-app at all times (kept out of generated files) -->
+<!-- Persistent tool attribution + the single global progress/status line for
+     SVG / 3D / STL generation (driven by src/status.ts). -->
 <div class="app-status-bar">
-  Map data ©&nbsp;<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>&nbsp;contributors (ODbL)
-  ·&nbsp;Elevation:&nbsp;<a href="https://www.opentopodata.org/" target="_blank" rel="noopener">OpenTopoData</a>&nbsp;(SRTM)
-  ·&nbsp;Globe:&nbsp;<a href="https://cesium.com/" target="_blank" rel="noopener">CesiumJS</a>
-  ·&nbsp;3D:&nbsp;<a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a>
+  <div class="status-fill"></div>
+  <span class="status-msg"></span>
+  <span class="status-credits">
+    Map data ©&nbsp;<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>&nbsp;contributors (ODbL)
+    ·&nbsp;Elevation:&nbsp;<a href="https://www.opentopodata.org/" target="_blank" rel="noopener">OpenTopoData</a>&nbsp;(SRTM)
+    ·&nbsp;Globe:&nbsp;<a href="https://cesium.com/" target="_blank" rel="noopener">CesiumJS</a>
+    ·&nbsp;3D:&nbsp;<a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a>
+  </span>
 </div>
 </body>
 </html>

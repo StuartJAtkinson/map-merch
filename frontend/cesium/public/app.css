@@ -280,6 +280,41 @@ body {
 .app-status-bar a { color: var(--text-muted); text-decoration: none; pointer-events: auto; }
 .app-status-bar a:hover { color: var(--accent); }
 
+/* Progress fill — thin line along the top edge of the strip; only while .busy.
+   This is the single home for SVG / 3D / STL generation progress. */
+.app-status-bar .status-fill {
+  position: absolute;
+  top: 0; left: 0;
+  height: 2px; width: 0;
+  background: linear-gradient(90deg, #4a9eff, #88c4ff);
+  opacity: 0;
+  transition: width 0.15s linear, opacity 0.3s ease;
+  pointer-events: none;
+}
+.app-status-bar.busy .status-fill { opacity: 1; }
+
+/* Live status message — sits before the attribution credits; hidden when empty. */
+.app-status-bar .status-msg {
+  color: var(--accent);
+  flex-shrink: 0;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-status-bar .status-msg:empty { display: none; }
+.app-status-bar .status-credits { overflow: hidden; text-overflow: ellipsis; }
+
+/* Shared save block — identical placement/spacing across SVG / 3D / print panels. */
+.save-section { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+/* Read-only auto-generated name shown above the Save button (no manual naming). */
+.save-name-preview {
+  font-size: 12px; color: var(--text-high);
+  padding: 7px 9px; border-radius: var(--radius-input);
+  background: var(--bg-item); border: 1.5px solid var(--border-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.save-name-preview:empty { display: none; }
+
 /* ── Spinner ────────────────────────────────────────────────────────────────── */
 .spinner {
   display: none;

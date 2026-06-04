@@ -150,6 +150,14 @@ async function loadProjects() {
     return;
   }
 
+  // Append a 2-digit ordinal only when ≥2 saved designs share the same stored name.
+  const displayName = (p) => {
+    const group = projects.filter(x => x.name === p.name)
+                          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    if (group.length < 2) return p.name;
+    return `${p.name} #${String(group.findIndex(x => x.id === p.id) + 1).padStart(2, '0')}`;
+  };
+
   const grid = document.getElementById('grid');
   grid.style.display = 'grid';
   grid.innerHTML = projects.map(p => {
@@ -161,7 +169,7 @@ async function loadProjects() {
     return `
       <div class="project-card" data-id="${p.id}">
         <div class="card-thumb">${thumb}</div>
-        <div class="card-name">${escHtml(p.name)}</div>
+        <div class="card-name">${escHtml(displayName(p))}</div>
         <div class="card-meta">
           ${emoji} ${p.merch_type}<br>
           ${date}

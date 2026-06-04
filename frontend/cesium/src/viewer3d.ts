@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { Status } from './status';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 export interface Viewer3DScene {
@@ -54,7 +55,6 @@ export class Viewer3D {
   private ground!: THREE.Mesh;
   private osmGroup!: THREE.Group;
   private fabricGroup!: THREE.Group;
-  private grid!: THREE.GridHelper;
 
   private osmMats: any[] = [];
   private allMats: any[] = [];
@@ -69,6 +69,7 @@ export class Viewer3D {
   private entryDone  = false;
   private entryStart: number | null = null;
   private barStart   = 0;
+  private barPct     = 0;   // current progress %, mirrored to the global Status strip
   private barFinishing = false;
 
   private showingPreview = false;
@@ -135,10 +136,9 @@ export class Viewer3D {
     this._groundTexApplied = false; this.groundTexPromise = Promise.resolve();
     this.wiresOn = false;
 
-    // Reset UI
-    this._elText('status-3d', 'Loading…'); this._elText('stats-3d', '');
-    this._show('loading-3d', true); this._el('load-bar-3d').style.width = '0%';
-    this._el('loading-3d').style.opacity = '1'; this._el('loading-3d').style.display = 'flex';
+    // Reset UI — generation progress now lives in the global bottom strip.
+    this._elText('stats-3d', '');
+    Status.begin('Building 3D preview…'); this.barPct = 0;
     this._show('btn-3d-mode', false);
     this._el('btn-3d-wire').classList.remove('on'); this._elText('btn-3d-wire', '⬡ Wireframe');
     this._el('btn-3d-rotate').classList.remove('on'); this._elText('btn-3d-rotate', '▶ Auto-rotate');
@@ -218,12 +218,6 @@ export class Viewer3D {
       new THREE.LineBasicMaterial({ color: 0x2244aa }),
     ));
 
-    // Grid
-    const gh = Math.max(SW, SD);
-    this.grid = new THREE.GridHelper(gh*2, 20, 0x2244aa, 0x1a3366);
-    this.grid.position.y = -0.5;
-    scene.add(this.grid);
-
     // Groups
     this.osmGroup = new THREE.Group(); scene.add(this.osmGroup);
     this.fabricGroup = new THREE.Group(); this.fabricGroup.visible = false; scene.add(this.fabricGroup);
@@ -249,8 +243,12 @@ export class Viewer3D {
     const km2 = (east-west)*cosLat*111.32*(north-south)*111.32;
     const tau  = Math.max(1500, Math.min(8000, 1000+km2*800)/3);
     const t0   = performance.now();
-    const lb   = this._el('load-bar-3d');
-    const preBar = () => { if (this.entryReady) return; lb.style.width=(50*(1-Math.exp(-(performance.now()-t0)/tau))).toFixed(1)+'%'; requestAnimationFrame(preBar); };
+    const preBar = () => {
+      if (this.entryReady) return;
+      this.barPct = 50 * (1 - Math.exp(-(performance.now() - t0) / tau));
+      Status.set(this.barPct / 100);
+      requestAnimationFrame(preBar);
+    };
     preBar();
 
     // Parse OSM + build buildings
@@ -276,9 +274,9 @@ export class Viewer3D {
     this._elText('stats-3d', `${nB} buildings`);
     this._elText('status-3d', '');
 
-    // Start loop + signal entry-ready
+    // Start loop. The building wireframe→solid entry is held back (entryReady stays
+    // false) until the SVG fold/translation animation has laid flat — set below.
     this._startLoop();
-    this.entryReady = true;
 
     // SVG fold animation
     if (svgUrl && cover) {
@@ -298,6 +296,7 @@ export class Viewer3D {
           const p = Math.min(1,(now-t0f)/600);
           fGrp.rotation.x = -Math.PI/2*(1-Math.pow(1-p,3));
           if (p<1) { requestAnimationFrame(fold); return; }
+          this.entryReady = true;   // SVG has laid flat — now grow the 3D buildings
           const t0fd=performance.now();
           const fade=(now2:number)=>{
             const fp=Math.min(1,(now2-t0fd)/400); fMat.opacity=1-fp;
@@ -315,6 +314,9 @@ export class Viewer3D {
           }; fade(performance.now());
         }; fold(performance.now());
       });
+    } else {
+      // No SVG fold to wait on — let the buildings emerge immediately.
+      this.entryReady = true;
     }
 
     // Wire panel buttons for this scene
@@ -346,23 +348,20 @@ export class Viewer3D {
 
   // ── Entry animation tick ──────────────────────────────────────────────────
   private _tickEntry(now: number): boolean {
-    if (this.entryStart===null){ this.entryStart=now; this.barStart=parseFloat(this._el('load-bar-3d').style.width)||0; }
+    if (this.entryStart===null){ this.entryStart=now; this.barStart=this.barPct; }
     const el = now - this.entryStart;
-    const lb = this._el('load-bar-3d');
-    if (el<TOTAL_MS && !this.barFinishing) lb.style.width=(this.barStart+(97-this.barStart)*(el/TOTAL_MS)).toFixed(1)+'%';
+    if (el<TOTAL_MS && !this.barFinishing) {
+      this.barPct = this.barStart + (97 - this.barStart) * (el / TOTAL_MS);
+      Status.set(this.barPct / 100);
+    }
     if (el>=TOTAL_MS) {
       this.animMats.forEach(m=>{m.wireframe=false;m.transparent=false;m.opacity=1;m.color.set(m._solidColor);});
       this.scene.background.set(BG); if(this.scene.fog)this.scene.fog.color.set(BG);
       if(this.matGround.map){this.matGround.color.set(0xffffff);this.matGround.needsUpdate=true;}
       if (!this.barFinishing) {
         this.barFinishing=true;
-        const t0f=performance.now(), loadEl=this._el('loading-3d');
-        const fin=(n:number)=>{
-          const t=Math.min(1,(n-t0f)/200); lb.style.width=(97+3*t)+'%';
-          if(t<1){requestAnimationFrame(fin);return;}
-          loadEl.style.transition='opacity 0.3s'; loadEl.style.opacity='0';
-          setTimeout(()=>{loadEl.style.display='none';loadEl.style.opacity='1';loadEl.style.transition='';},350);
-        }; fin(performance.now());
+        this.barPct = 100;
+        Status.set(1); Status.done();
       }
       return true;
     }
@@ -466,8 +465,6 @@ export class Viewer3D {
       this.scene.background.set(this.wiresOn?0x000000:BG);
       if(this.scene.fog)this.scene.fog.color.set(this.wiresOn?0x000000:BG);
       this.allMats.forEach(m=>{m.wireframe=this.wiresOn;m.color.set(this.wiresOn?m._wireColor:m._solidColor);});
-      (this.grid.material as any[])[0].color.set(this.wiresOn?0x0055ff:0x2244aa);
-      (this.grid.material as any[])[1].color.set(this.wiresOn?0x003399:0x1a3366);
       wBtn.classList.toggle('on',this.wiresOn); wBtn.textContent=this.wiresOn?'⬡ Solid':'⬡ Wireframe';
     });
 

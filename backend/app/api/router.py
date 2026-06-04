@@ -212,6 +212,62 @@ async def health():
     return {"status": "ok"}
 
 
+# ─── Reverse geocode (place-name pre-flight for auto save-names) ────────────────
+
+# Ordered broad → specific. Levels are assembled in this order; the most-specific
+# present value becomes the place label used when auto-naming a saved design.
+_GEO_LEVEL_KEYS = [
+    "country", "state", "region", "state_district", "county",
+    "city", "municipality", "town", "city_district",
+    "suburb", "village", "hamlet", "neighbourhood",
+]
+# The save-name label is the named settlement (town/village/city), NOT a sub-locality
+# like a suburb — e.g. Pontefract, not Chequerfield. Most-specific settlement first.
+_LABEL_PRIORITY = ["village", "town", "city", "municipality"]
+_geocode_cache: dict[tuple[float, float], dict] = {}
+
+
+@app.get("/api/geocode/reverse")
+async def reverse_geocode(lat: float, lon: float):
+    """Nearest place hierarchy for a coordinate, for auto-naming saved designs.
+
+    Returns location levels broad→specific plus the most-specific `label`.
+    Cached by coordinate rounded to ~3 dp (~110 m) to respect Nominatim usage.
+    """
+    key = (round(lat, 3), round(lon, 3))
+    if key in _geocode_cache:
+        return _geocode_cache[key]
+
+    result = {"levels": [], "label": None, "country_code": None, "postcode": None}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
+            r = await client.get(
+                "https://nominatim.openstreetmap.org/reverse",
+                params={"lat": lat, "lon": lon, "format": "jsonv2",
+                        "zoom": 16, "addressdetails": 1},
+                headers={"User-Agent": "heart-on-a-sleeve/1.0 (https://heart.stuartjatkinson.co.uk)"},
+            )
+            if r.is_success:
+                addr = (r.json() or {}).get("address", {}) or {}
+                levels: list[str] = []
+                for k in _GEO_LEVEL_KEYS:
+                    v = addr.get(k)
+                    if v and (not levels or levels[-1] != v):
+                        levels.append(str(v))
+                label = next((str(addr[k]) for k in _LABEL_PRIORITY if addr.get(k)), None)
+                result = {
+                    "levels": levels,
+                    "label": label or (levels[-1] if levels else None),
+                    "country_code": (addr.get("country_code") or "").upper() or None,
+                    "postcode": addr.get("postcode"),
+                }
+    except Exception:
+        pass  # non-critical — client falls back to search text / merch+date
+
+    _geocode_cache[key] = result
+    return result
+
+
 # ─── Estimate ─────────────────────────────────────────────────────────────────
 
 @app.post("/api/estimate")
@@ -245,7 +301,7 @@ async def estimateGeneration(req: SVGGenerationRequest):
     """
     element_count = 0
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=8, read=30, write=5)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=8.0)) as client:
             r = await client.post(
                 os.environ.get("OVERPASS_ENDPOINT", "https://overpass.kumi.systems/api/interpreter"),
                 data={"data": count_query},

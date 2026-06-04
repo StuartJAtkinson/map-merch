@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import { renderSvg, svgToString, svgToBlobUrl, SVG_SPECS } from './svg-renderer';
+import { Status } from './status';
 
 Cesium.Ion.defaultAccessToken = '';
 
@@ -84,6 +85,49 @@ const COASTER_ICONS: Record<CoasterShape, string>  = { square: '⬜', circle: '�
 const COASTER_LABELS: Record<CoasterShape, string> = { square: 'Square', circle: 'Circle', hexagon: 'Hexagon' };
 let coasterShapeIdx = 0;
 let coasterShape: CoasterShape = 'square';
+
+// ---------------------------------------------------------------------------
+// Auto save-name — "Place — Merch (Shape)"; the #NN is derived at display time
+// (see displayName), so the stored name carries no number and identity is the id.
+// ---------------------------------------------------------------------------
+const MERCH_LABELS: Record<string, string> = {
+  tshirt: 'T-Shirt', mug: 'Mug', tote: 'Tote Bag',
+  coaster: 'Coaster', placemat: 'Placemat', '3d_print': 'Relief',
+};
+// Only merch with more than one shape get a (Shape) token — today just the coaster.
+function merchHasVariableShape(m: string): boolean { return m === 'coaster'; }
+
+// Most-specific place from the reverse-geocode pre-flight, set in generate().
+let lastPlaceLabel: string | null = null;
+
+function placeLabel(): string {
+  if (lastPlaceLabel) return lastPlaceLabel;
+  const typed = (document.getElementById('place-search') as HTMLInputElement | null)?.value.trim();
+  return typed || '';
+}
+
+function buildBaseName(): string {
+  const merch = MERCH_LABELS[merchType] ?? merchType;
+  const shape = merchHasVariableShape(merchType) ? ` (${COASTER_LABELS[coasterShape]})` : '';
+  const place = placeLabel();
+  return place ? `${place} — ${merch}${shape}` : `${merch}${shape}`;
+}
+
+// Show the auto-generated name (read-only) above a panel's Save button.
+function setSaveNamePreview(id: string): void {
+  const el = document.getElementById(id);
+  if (el) el.textContent = buildBaseName();
+}
+
+// Compose the displayed name: append a 2-digit ordinal only when ≥2 saves share the
+// same stored base name. A lone save shows no number ("start without one at all").
+function displayName(p: any, all: any[]): string {
+  const group = all.filter(x => x.name === p.name)
+                   .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  if (group.length < 2) return p.name;
+  const idx = group.findIndex(x => x.id === p.id);
+  return `${p.name} #${String(idx + 1).padStart(2, '0')}`;
+}
 
 // ---------------------------------------------------------------------------
 // RotSel geometry
@@ -548,7 +592,6 @@ function clearGeneratedState(): void {
   if (svgView.style.display !== 'none') {
     svgView.style.display = 'none';
     document.getElementById('svg-save-section')!.style.display = 'none';
-    (document.getElementById('svg-save-name') as HTMLInputElement).value = '';
     (document.getElementById('svg-save-status') as HTMLElement).textContent = '';
     document.getElementById('panel')!.style.visibility = 'visible';
     const ov = document.getElementById('transition-overlay') as HTMLCanvasElement;
@@ -692,24 +735,6 @@ function drawTransFrame(
   }
 }
 
-function drawProgressBar(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number, w: number, h: number, prog: number,
-): void {
-  ctx.fillStyle = 'rgba(255,255,255,0.10)';
-  ctx.beginPath();
-  (ctx as any).roundRect?.(x, y, w, h, h / 2) ?? ctx.rect(x, y, w, h);
-  ctx.fill();
-  const fw = Math.max(h, w * Math.min(1, prog));
-  const grad = ctx.createLinearGradient(x, 0, x + fw, 0);
-  grad.addColorStop(0, '#4a9eff');
-  grad.addColorStop(1, '#88c4ff');
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  (ctx as any).roundRect?.(x, y, fw, h, h / 2) ?? ctx.rect(x, y, fw, h);
-  ctx.fill();
-}
-
 async function runTransition(
   svgP: Promise<any>,
   estimatedMs = 6_000,
@@ -765,7 +790,7 @@ async function runTransition(
   const scratch = document.createElement('canvas');
   const scratchCtx = scratch.getContext('2d')!;
 
-  const BAR_H = 4, BAR_Y = H - 44, BAR_X = Math.round(W * 0.15), BAR_W = Math.round(W * 0.70);
+  Status.begin('Generating map…');
   // Time constant for asymptotic approach — animation stays in perpetual motion
   const TAU = 600;
   const t0 = performance.now();
@@ -810,8 +835,8 @@ async function runTransition(
       ctx.drawImage(scratch, 0, 0, bW, bH, dx, dy, dw, dh);
       ctx.imageSmoothingEnabled = true;
 
-      const prog = svgDone ? 1 : Math.min(1, elapsed / Math.max(1, estimatedMs));
-      drawProgressBar(ctx, BAR_X, BAR_Y, BAR_W, BAR_H, prog);
+      const prog = svgDone ? 1 : Math.min(0.95, elapsed / Math.max(1, estimatedMs));
+      Status.set(prog);
 
       if (svgDone && t >= 0.75) { resolve(); return; }
       requestAnimationFrame(loop);
@@ -839,6 +864,7 @@ async function runTransition(
     ctx.globalAlpha = 1;
   });
 
+  Status.done();
   return svgResult;
 }
 
@@ -1142,6 +1168,7 @@ async function openSvgView(url: string, text: string, stlResult: any) {
   const saveStatus  = document.getElementById('svg-save-status')!;
   saveStatus.textContent = '';
   saveSection.style.display = (!is3d || stlResult) ? '' : 'none';
+  setSaveNamePreview('svg-save-name-preview');
   // Show STL download links immediately if we already have them
   if (is3d && stlResult) onStlReady();
 
@@ -1190,6 +1217,7 @@ svg3dBtn.addEventListener('click', async () => {
   const bbox = rotSelAabb(confirmed);
   const view3dEl = document.getElementById('viewer-3d-view')!;
   view3dEl.style.display = 'flex';
+  setSaveNamePreview('stl-save-name-preview');
 
   const r = svgVp.getBoundingClientRect();
 
@@ -1225,6 +1253,7 @@ let _printScene: any = null;
 async function openPrintView(scene: any): Promise<void> {
   _printScene = scene;
   document.getElementById('viewer-print-view')!.style.display = 'flex';
+  setSaveNamePreview('print-save-name-preview');
   if (!_printViewer) {
     const mod = await import('./print-viewer');
     _printViewer = new mod.PrintViewer(document.getElementById('canvas-wrap-print')!);
@@ -1262,11 +1291,10 @@ document.getElementById('btn-print-back')!.addEventListener('click', () => {
 document.getElementById('print-save-btn')!.addEventListener('click', async () => {
   const token = localStorage.getItem('hoas_token');
   if (!token) { location.href = '/login.html?returnTo=' + encodeURIComponent(location.href); return; }
-  const nameEl = document.getElementById('print-save-name') as HTMLInputElement;
   const statusEl = document.getElementById('print-save-status')!;
   const s = _printScene;
   if (!s) return;
-  const name = nameEl.value.trim() || `${s.merch || 'design'} — ${new Date().toLocaleDateString('en-GB')}`;
+  const name = buildBaseName();
   statusEl.textContent = 'Saving…';
   const thumbnail = _printViewer?.getSnapshot(150) ?? null;
   try {
@@ -1365,6 +1393,14 @@ const abort = new AbortController();
 
   const bboxArr: [number, number, number, number] = [bbox.west, bbox.south, bbox.east, bbox.north];
 
+  // Place-name pre-flight — runs in parallel with the OSM fetch; result feeds the auto
+  // save-name. Best-effort and non-blocking (falls back to search text / merch label).
+  lastPlaceLabel = null;
+  fetch(`/api/geocode/reverse?lat=${(bbox.south + bbox.north) / 2}&lon=${(bbox.west + bbox.east) / 2}`)
+    .then(r => r.ok ? r.json() : null)
+    .then(loc => { if (loc && loc.label) lastPlaceLabel = loc.label; })
+    .catch(() => { /* non-critical */ });
+
   // Start OSM fetch immediately — don't wait for the estimate pre-flight.
   // The estimate makes its own Overpass count query (up to 30s); awaiting it
   // before the real fetch would serialise two Overpass round-trips.
@@ -1406,7 +1442,7 @@ const abort = new AbortController();
     if (!estimate) return;
     estimatedMs = (estimate.svg_estimate_ms ?? estimateGenMs(bbox)) + (estimate.osm_estimate_ms ?? estimateGenMs(bbox));
     const label: Record<string, string> = { low: 'Simple area', medium: 'Medium density', high: 'Complex area', very_high: 'Very complex — may be slow' };
-    status.textContent = `${estimate.area_km2} km² · ${(estimate.element_count / 1000).toFixed(1)}k elements · ${label[estimate.complexity] ?? estimate.complexity}`;
+    Status.message(`Generating map… · ${estimate.area_km2} km² · ${(estimate.element_count / 1000).toFixed(1)}k elements · ${label[estimate.complexity] ?? estimate.complexity}`);
   }).catch(() => { /* non-critical */ });
 
   // Fly camera to fit the selection in view — runs in parallel with the OSM fetch.
@@ -1428,6 +1464,7 @@ const abort = new AbortController();
     ov.style.transition = '';
 
   } catch (err: any) {
+    Status.done();
     const ov = document.getElementById('transition-overlay') as HTMLCanvasElement;
     ov.style.display = 'none';
     ov.style.opacity = '1';
@@ -1550,9 +1587,8 @@ async function saveProject(): Promise<void> {
   if (!confirmed) return;
 
   const is3dOpen = document.getElementById('viewer-3d-view')!.style.display !== 'none';
-  const nameEl   = document.getElementById(is3dOpen ? 'stl-save-name' : 'svg-save-name') as HTMLInputElement;
   const statusEl = document.getElementById(is3dOpen ? 'stl-save-status' : 'svg-save-status') as HTMLElement;
-  const name     = nameEl.value.trim() || `${merchType} — ${new Date().toLocaleDateString('en-GB')}`;
+  const name     = buildBaseName();
   statusEl.textContent = 'Saving…';
 
   const bbox = rotSelAabb(confirmed);
@@ -1709,7 +1745,7 @@ async function renderDesigns(): Promise<void> {
       return `
         <div class="design-card">
           <div class="design-thumb">${thumb}</div>
-          <div class="design-name">${esc(p.name)}</div>
+          <div class="design-name">${esc(displayName(p, projects))}</div>
           <div class="design-meta">${emoji} ${p.merch_type}<br>${date}</div>
           <div class="design-actions">
             <button class="btn design-load-btn" data-id="${p.id}">↩ Load</button>
