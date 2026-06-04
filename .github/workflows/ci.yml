@@ -180,6 +180,13 @@ jobs:
   #   GCP_SERVICE_ACCOUNT             — hoas-deployer@PROJECT.iam.gserviceaccount.com
   #   DATABASE_URL                    — postgresql+asyncpg://user:pass@/db?host=/cloudsql/PROJECT:REGION:INSTANCE
   #   SECRET_KEY                      — random 64-char string (python -c "import secrets; print(secrets.token_hex(32))")
+  #
+  # DATABASE_URL / SECRET_KEY are the single source of truth in GitHub Secrets.
+  # The "Sync secrets to Secret Manager" step mirrors them into Secret Manager
+  # (secrets hoas-database-url / hoas-secret-key) so Cloud Run references them by
+  # name instead of storing plaintext in the service config. One-time bootstrap
+  # (secret create + IAM: runtime SA secretAccessor, deployer SA secretVersionAdder)
+  # was done via gcloud; see ISSUES.md (2026-06-04).
 
   deploy:
     name: Deploy to Cloud Run
@@ -204,6 +211,19 @@ jobs:
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      # Single source of truth stays in GitHub Secrets; this step mirrors them into
+      # Secret Manager so Cloud Run can reference them (no plaintext in the service
+      # config). Values are passed via env (not the script body) so they aren't
+      # echoed into the command line. The secrets + IAM were bootstrapped once via
+      # gcloud; this only adds a new version each deploy.
+      - name: Sync secrets to Secret Manager
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        run: |
+          printf '%s' "$DATABASE_URL" | gcloud secrets versions add hoas-database-url --data-file=- --project="${{ vars.GCP_PROJECT_ID }}"
+          printf '%s' "$SECRET_KEY"   | gcloud secrets versions add hoas-secret-key   --data-file=- --project="${{ vars.GCP_PROJECT_ID }}"
 
       - name: Build and push backend to Artifact Registry
         uses: docker/build-push-action@v6
@@ -231,10 +251,11 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/hoas/hoas-backend:${{ github.sha }}
           env_vars: |
-            DATABASE_URL=${{ secrets.DATABASE_URL }}
-            SECRET_KEY=${{ secrets.SECRET_KEY }}
             ENVIRONMENT=production
             CORS_ORIGINS=${{ vars.FRONTEND_URL || 'https://heart.stuartjatkinson.co.uk' }}
+          secrets: |
+            DATABASE_URL=hoas-database-url:latest
+            SECRET_KEY=hoas-secret-key:latest
           flags: >-
             --allow-unauthenticated
             --min-instances=0
