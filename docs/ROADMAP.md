@@ -77,7 +77,7 @@ docker compose up -d
 
 # Start frontend dev server (Vite, whichever shell you're in)
 cd frontend/cesium && npm run dev
-# → http://localhost:5173
+# → http://localhost:5174
 ```
 
 - Backend source is bind-mounted (`./backend:/app`) — FastAPI reloads on save
@@ -152,7 +152,7 @@ git push origin main
 - [x] FastAPI app with uvicorn, all imports clean
 - [x] `__init__.py` in all subpackages
 - [x] Pydantic v2 schemas — `BBox`, `SVGGenerationRequest`, `STLGenerationRequest`, `LicenseCheckRequest`, `MERCH_SPECS`
-- [x] CORS configured for `localhost:5173`
+- [x] CORS configured for `localhost:5174`
 - [x] `POST /api/generate/svg` — fetches OSM, renders SVG, saves to `/output/svg_output/`
 - [x] `POST /api/generate/stl` — fetches OSM, generates 3 STL parts, saves to `/output/stl_output/`
 - [x] `POST /api/license/check` — returns ODbL attribution
@@ -460,3 +460,46 @@ not navigation** (no re-pull).
 **Remaining legacy:** `dashboard.html` kept as a standalone gallery (Open now routes into the
 SPA); could later fold into the in-app "My Designs" panel entirely. `landing.html` + `login.html`
 remain as separate entry pages by design.
+
+---
+
+## 3-region shell + preflight gate (planned 2026-06-01)
+
+**Decision:** keep the unfiltered pull. Instead of lightening queries, gate by element count
+up front and make the status bar the single home for all feedback.
+
+**Strict 3-region layout** (everything lives in exactly one of these, nothing floating):
+```
+┌───────────┬───────────────────────────────┐
+│  SIDEBAR  │  MAIN STAGE (map | svg | 3d)   │
+│ (menu /   │                               │
+│  controls)│                               │
+├───────────┴───────────────────────────────┤
+│  STATUS BAR  — attribution · progress · errors/timeouts │
+└─────────────────────────────────────────────┘
+```
+Goal: clean reflow for mobile later — main stage on top, scrollable sidebar + status bar
+stacked at the bottom. So treat sidebar / stage / status as the only three top-level boxes.
+
+**Status bar becomes the feedback hub:**
+- ✅ Move ALL progress bars into it (generation transition bar, `#load-bar-3d`, `#load-bar-print`)
+  — one shared progress element in the status bar, driven per-stage. Done via `src/status.ts`
+  (`Status.begin/set/done`) — map→SVG transition, 3D loader, and STL loader all route through it.
+- ✅ Shared `.sidebar`/`.stage` shell classes (`app.css`) applied to `#panel`, `#svg-side`,
+  `#panel3d`, `#panel-print` — one canonical control order (user-nav → save → options → back)
+  across all four views (2026-06-13).
+- 📋 Surface errors + timeouts there (Overpass 502/timeout, generation failures) instead of the
+  sidebar `#status` text / silent `.catch` — not yet done.
+
+**Preflight element-count gate:**
+- `/api/estimate` already runs a lightweight Overpass `out count` (no geometry) → `element_count`.
+  Run it as a BLOCKING preflight before the heavy fetch (currently `app.ts` starts the OSM fetch
+  immediately and does not await the estimate — see `generate()` around the OSM fetch).
+- If `element_count` > threshold → don't fetch; show "Area too detailed — N elements, make it
+  smaller" in the status bar. Threshold TBD (tune against what the backend/Overpass handle).
+- Bonus: the count query is far lighter than the full fetch, so it's a fast, reliable verdict
+  even when the full Overpass query would time out.
+
+**Status:** 🔶 in progress — status-bar consolidation and shell/panel alignment done; the
+preflight element-count gate itself is still 📋 planned. (User is fine with unfiltered fetch +
+Overpass coin-flips until this lands.)

@@ -3,6 +3,11 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { Status } from './status';
 
+// Build a prism geometry (hexagon cross-section) for the baseplate.
+function _hexCylGeometry(r: number, height: number, sides = 6): THREE.CylinderGeometry {
+  return new THREE.CylinderGeometry(r, r, height, sides, 1);
+}
+
 // In-SPA 3D-print preview (the 3-piece STL assembly). Ported from the old standalone
 // 3d-print.html so the print view is a state inside the SPA — opening it is an overlay,
 // "back" is a state pop (no page navigation, no OSM/STL re-pull).
@@ -221,7 +226,12 @@ export class PrintViewer {
     const bpW = sz.x, bpD = sz.z, bpH = 0.008 * Math.max(bpW, bpD);
     const bpMat: any = new THREE.MeshStandardMaterial({ color: 0x787870, roughness: 0.85, metalness: 0.04 });
     bpMat._solidColor = 0x787870; bpMat._wireColor = 0x778899; this.allMats.push(bpMat);
-    const bpMesh = new THREE.Mesh(new THREE.BoxGeometry(bpW, bpH, bpD), bpMat);
+    // Baseplate shape matches the coaster selection
+    const shape = this._scene?.coasterShape ?? 'square';
+    const bpGeo = (shape === 'circle') ? new THREE.CylinderGeometry(Math.min(bpW, bpD) / 2, Math.min(bpW, bpD) / 2, bpH, 32)
+      : (shape === 'hexagon') ? _hexCylGeometry(Math.min(bpW, bpD) / 2, bpH, 6)
+      : new THREE.BoxGeometry(bpW, bpH, bpD);
+    const bpMesh = new THREE.Mesh(bpGeo, bpMat);
     bpMesh.castShadow = bpMesh.receiveShadow = true;
     const bldLocalMinY = (bldgBox.min.y - this.printGroup.position.y) / scaleX;
     bpMesh.position.set(centre.x / scaleX, bldLocalMinY - bpH / 2, centre.z / scaleZ);

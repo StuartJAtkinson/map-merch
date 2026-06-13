@@ -29,12 +29,10 @@
     <link rel="stylesheet" href="/app.css">
     <style>
         /* ── Map-selector-specific styles only ── */
-        #cesiumContainer { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
-
-        #panel {
-            position: absolute; top: 20px; left: 20px; width: 300px;
-            max-height: calc(100vh - 40px); overflow-y: auto; z-index: 1000;
-        }
+        /* Globe stays full-viewport (the generate→SVG transition needs full-screen
+           coords); the sidebar docks over its left edge for the shared shell look. */
+        #cesiumContainer { position: absolute; inset: 0; }
+        #panel { position: absolute; top: 0; left: 0; z-index: 1000; }
 
         .section { margin-bottom: 16px; }
 
@@ -123,12 +121,7 @@
             display: none; position: fixed; inset: 0; z-index: 9998;
             flex-direction: row; background: var(--bg-page);
         }
-        #svg-side {
-            width: 272px; flex-shrink: 0; height: 100vh;
-            overflow-y: auto; padding: 18px 14px 24px; box-sizing: border-box;
-        }
         #svg-vp {
-            flex: 1; position: relative; overflow: hidden;
             cursor: grab; background: var(--bg-page);
         }
         #svg-vp.dragging  { cursor: grabbing; }
@@ -189,11 +182,6 @@
             flex-direction: row; display: none;
             background: var(--bg-page);
         }
-        #panel3d {
-            width: 272px; flex-shrink: 0; height: 100vh;
-            overflow-y: auto; padding: 18px 14px 24px; box-sizing: border-box;
-        }
-        #canvas-wrap-3d { flex: 1; position: relative; overflow: hidden; }
 #loading-3d { display: none; flex-direction: column; gap: 6px; padding: 8px 0; }
 
         /* ── Inline 3D-print viewer (STL assembly) ── */
@@ -202,11 +190,6 @@
             flex-direction: row; display: none;
             background: var(--bg-page);
         }
-        #panel-print {
-            width: 272px; flex-shrink: 0; height: 100vh;
-            overflow-y: auto; padding: 18px 14px 24px; box-sizing: border-box;
-        }
-        #canvas-wrap-print { flex: 1; position: relative; overflow: hidden; }
         #loading-print { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
 
         /* ── My Designs floating panel ── */
@@ -336,9 +319,8 @@
 <body>
 
 <div id="cesiumContainer"></div>
-<div id="map-hint">Left drag — pan<br>Right drag — zoom<br>Middle drag — tilt<br>Scroll — zoom</div>
 
-<div id="panel" class="panel">
+<div id="panel" class="panel sidebar">
     <div class="sheet-handle" id="panel-handle"></div>
     <h2>Heart on a Sleeve</h2>
 
@@ -387,23 +369,17 @@
     <div class="divider"></div>
     <div class="user-nav-slot" data-slot="map"></div>
 </div>
+<div id="map-hint">Left drag — pan<br>Right drag — zoom<br>Middle drag — tilt<br>Scroll — zoom</div>
 
 <canvas id="transition-overlay"></canvas>
 <img id="svg-cover" style="display:none;position:fixed;z-index:9998;pointer-events:none;border-radius:4px;">
 
 <!-- Inline 3D viewer — single-page, no iframe -->
 <div id="viewer-3d-view">
-  <div id="panel3d" class="panel">
+  <div id="panel3d" class="panel sidebar">
     <div class="sheet-handle" id="panel3d-handle"></div>
-    <!-- Canonical panel order: Back → Title → Info → Toggles → divider → Save → divider → Nav -->
-    <button class="btn" id="btn-3d-back">← SVG View</button>
-    <h2>3D Preview</h2>
-    <div id="status-3d" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-bottom:4px;"></div>
-    <div id="stats-3d" style="font-size:11px;color:var(--text-dim);min-height:12px;margin-bottom:8px;"></div>
-    <div class="divider"></div>
-    <button class="btn" id="btn-3d-mode" style="display:none"></button>
-    <button class="btn" id="btn-3d-wire">⬡ Wireframe</button>
-    <button class="btn" id="btn-3d-rotate">▶ Auto-rotate</button>
+    <!-- Panel order: User nav TOP → Save → Options → Back BOTTOM -->
+    <div class="user-nav-slot" data-slot="3d"></div>
     <div class="divider"></div>
     <div class="save-section">
       <div class="save-name-preview" id="stl-save-name-preview"></div>
@@ -411,28 +387,23 @@
       <div id="stl-save-status" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-top:4px;"></div>
     </div>
     <div class="divider"></div>
-    <div class="user-nav-slot" data-slot="3d"></div>
+    <div id="status-3d" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-bottom:4px;"></div>
+    <div id="stats-3d" style="font-size:11px;color:var(--text-dim);min-height:12px;margin-bottom:8px;"></div>
+    <button class="btn" id="btn-3d-mode" style="display:none"></button>
+    <button class="btn" id="btn-3d-wire">⬡ Wireframe</button>
+    <button class="btn" id="btn-3d-rotate">▶ Auto-rotate</button>
+    <div class="divider"></div>
+    <button class="btn" id="btn-3d-back">← SVG View</button>
   </div>
-  <div id="canvas-wrap-3d"></div>
+  <div id="canvas-wrap-3d" class="stage"></div>
 </div>
 
 <!-- ── Inline 3D-print viewer (STL assembly; in-SPA state, no navigation) ── -->
 <div id="viewer-print-view">
-  <div id="panel-print" class="panel">
+  <div id="panel-print" class="panel sidebar">
     <div class="sheet-handle" id="panel-print-handle"></div>
-    <!-- Canonical panel order: Back → Title → Info → Toggles → Downloads → Secondary → divider → Save → divider → Nav -->
-    <button class="btn" id="btn-print-back">← 3D Map</button>
-    <h2>3D Print Preview</h2>
-    <div id="status-print" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-bottom:6px;"></div>
-    <button class="btn" id="btn-print-wire">⬡ Wireframe</button>
-    <button class="btn" id="btn-print-rotate">▶ Auto-rotate</button>
-    <div class="divider"></div>
-    <div class="dl-label">Download print files:</div>
-    <button class="btn" id="dl-multicolour-print" style="border-color:#4a9eff;color:#4a9eff">↓ 3-colour set (buildings · land · water)</button>
-    <a class="btn" id="dl-singlecolour-print" download="buildings.stl" style="border-color:#909088;color:#b0b0a8">↓ Single colour (buildings &amp; roads)</a>
-    <div class="divider"></div>
-    <button class="btn" id="btn-print-regen" style="border-color:#4a9eff;color:#4a9eff">⟳ Regenerate STL</button>
-    <div id="regen-status-print" style="font-size:10px;color:var(--text-dim);margin-top:4px;min-height:14px;"></div>
+    <!-- Panel order: User nav TOP → Save → Options → Back BOTTOM -->
+    <div class="user-nav-slot" data-slot="print"></div>
     <div class="divider"></div>
     <div class="save-section">
       <div class="save-name-preview" id="print-save-name-preview"></div>
@@ -440,40 +411,63 @@
       <div id="print-save-status" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-top:4px;"></div>
     </div>
     <div class="divider"></div>
-    <div class="user-nav-slot" data-slot="print"></div>
+    <div id="status-print" style="font-size:11px;color:var(--text-mid);min-height:14px;margin-bottom:6px;"></div>
+    <button class="btn" id="btn-print-wire">⬡ Wireframe</button>
+    <button class="btn" id="btn-print-rotate">▶ Auto-rotate</button>
+    <button class="btn" id="btn-print-regen" style="border-color:#4a9eff;color:#4a9eff">⟳ Regenerate STL</button>
+    <div id="regen-status-print" style="font-size:10px;color:var(--text-dim);margin-top:4px;min-height:14px;"></div>
+    <div class="divider"></div>
+    <div class="dl-label">Download print files:</div>
+    <button class="btn" id="dl-multicolour-print" style="border-color:#4a9eff;color:#4a9eff">↓ 3-colour set (buildings · land · water)</button>
+    <a class="btn" id="dl-singlecolour-print" download="buildings.stl" style="border-color:#909088;color:#b0b0a8">↓ Single colour (buildings &amp; roads)</a>
+    <div class="divider"></div>
+    <button class="btn" id="btn-print-back">← 3D Map</button>
   </div>
-  <div id="canvas-wrap-print"></div>
+<div id="canvas-wrap-print" class="stage"></div>
 </div>
 
 <!-- ── Inline SVG viewer (shown after generate, no page navigation) ── -->
 <div id="svg-view">
-    <div id="svg-side" class="panel">
+    <div id="svg-side" class="panel sidebar">
         <div class="sheet-handle" id="svg-side-handle"></div>
-        <button class="btn" id="btn-back">← Map</button>
-        <h2>SVG Preview</h2>
-        <div id="svg-regen-status"></div>
-        <div id="svg-scale-display">—</div>
-        <div id="svg-size-display"></div>
-
-        <div class="section">
-            <h3>Map Colours</h3>
-            <div id="svg-colour-picker"></div>
-        </div>
-
-        <div class="divider"></div>
-        <a   class="btn" id="svg-btn-dl" download="design.svg">↓ Download SVG</a>
-        <button class="btn" id="svg-btn-3d">◉ View 3D →</button>
-<div class="divider"></div>
-        <div class="hint">Scroll — zoom<br>Left drag — pan</div>
+        <!-- Panel order: User nav TOP → Save → Options → Back BOTTOM -->
+        <div class="user-nav-slot" data-slot="svg"></div>
         <div class="divider"></div>
         <div id="svg-save-section" class="save-section">
             <div class="save-name-preview" id="svg-save-name-preview"></div>
             <button class="btn" id="svg-save-btn">💾 Save Design</button>
             <div id="svg-save-status"></div>
         </div>
-        <div class="user-nav-slot" data-slot="svg"></div>
+        <div class="divider"></div>
+        <div id="svg-regen-status"></div>
+        <div id="svg-scale-display">—</div>
+        <div id="svg-size-display"></div>
+        <div class="section">
+            <h3>Map Colours</h3>
+            <div id="svg-colour-picker"></div>
+        </div>
+        <div class="section">
+            <h3>Branding</h3>
+            <label class="brand-row"><input type="checkbox" id="brand-on" checked> Green Party stamp</label>
+            <div class="brand-controls">
+              <select id="brand-style" class="brand-select">
+                <option value="outline">Impact outline</option>
+                <option value="banner">Green banner</option>
+              </select>
+            </div>
+            <!-- Click-to-position picker — shape outline + position dots -->
+            <div class="brand-pos-picker" id="brand-pos-picker">
+              <svg class="brand-shape-preview" id="brand-shape-svg" viewBox="0 0 80 80" width="80" height="80"></svg>
+              <div class="brand-pos-dots" id="brand-pos-dots"></div>
+            </div>
+        </div>
+        <div class="hint">Scroll — zoom<br>Left drag — pan</div>
+        <div class="divider"></div>
+        <a   class="btn" id="svg-btn-dl" download="design.svg">↓ Download SVG</a>
+        <button class="btn" id="svg-btn-3d">◉ View 3D →</button>
+        <button class="btn" id="btn-back">← Map</button>
     </div>
-    <div id="svg-vp">
+    <div id="svg-vp" class="stage">
         <div id="svg-wrap"></div>
     </div>
 </div>

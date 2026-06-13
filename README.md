@@ -83,7 +83,7 @@ FastAPI backend
 
 | Environment | How it runs | URL |
 |---|---|---|
-| **Dev** | Vite dev server + Docker backend + Docker DB | `:5173` |
+| **Dev** | Vite dev server + Docker backend + Docker DB | `:5174` |
 | **Full local** | All three services in Docker (mirrors Cloud Run) | `:8080` |
 | **Cloud (prod)** | CI/CD → Google Cloud Run (auto on push to `main`) | Custom domain |
 
@@ -115,7 +115,7 @@ This starts `database` (PostgreSQL/PostGIS on `:5432`) and `backend` (FastAPI on
 ```bash
 cd frontend/cesium
 npm install          # first time only
-npm run dev          # → http://localhost:5173
+npm run dev          # → http://localhost:5174
 ```
 
 Vite proxies `/api` and `/output` to the backend at `localhost:8000`.

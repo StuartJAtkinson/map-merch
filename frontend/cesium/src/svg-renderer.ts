@@ -124,6 +124,14 @@ function pathD(pts: [number,number][], close = false): string {
   return close ? d + ' Z' : d;
 }
 
+// ── Branding stamp ──────────────────────────────────────────────────────────
+export type BrandStyle = 'outline' | 'banner';
+export type BrandPos   = 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+export interface Branding { text: string; style: BrandStyle; position: BrandPos; }
+const GREEN_PARTY = '#5AB031';        // banner bar fill
+const STAMP_GREEN = '#00B140';        // pure-green Impact text fill
+const IMPACT_FONT = "Impact, 'Haettenschweiler', 'Franklin Gothic Bold', 'Arial Narrow', sans-serif";
+
 // ── Public API ────────────────────────────────────────────────────────────────
 export interface SvgRenderOptions {
   osmData:          { elements?: Record<string,unknown>[] };
@@ -136,6 +144,7 @@ export interface SvgRenderOptions {
   paletteOverrides?:Record<string,string>;
   includeLabels?:   boolean;
   includeBuildings?:boolean;
+  branding?:        Branding | null;
 }
 
 export function renderSvg(opts: SvgRenderOptions): SVGSVGElement {
@@ -143,6 +152,7 @@ export function renderSvg(opts: SvgRenderOptions): SVGSVGElement {
     osmData, bbox, merchType,
     style = 'osm_default', coasterShape = 'square',
     paletteOverrides = {}, includeLabels = true, includeBuildings = true,
+    branding = null,
   } = opts;
 
   const spec = SVG_SPECS[merchType] ?? SVG_SPECS['tshirt'];
@@ -289,6 +299,60 @@ export function renderSvg(opts: SvgRenderOptions): SVGSVGElement {
         'text-anchor': 'middle',
       });
       t.textContent = st.upper ? tags.name.toUpperCase() : tags.name;
+      g.appendChild(t);
+    }
+  }
+
+  // 7. Branding stamp (e.g. "WAKEFIELD GREEN PARTY") — top layer, clipped to shape.
+  if (branding && branding.text.trim()) {
+    const shapeKind = (merchType === 'coaster' && coasterShape === 'circle') ? 'circle'
+                    : (merchType === 'coaster' && coasterShape === 'hexagon') ? 'hexagon'
+                    : 'rect';
+    const txt  = branding.text.toUpperCase();
+    const minD = Math.min(W, H);
+    // Stamp spans exactly half the shape width — centered.
+    const fitW = (shapeKind === 'rect' ? W : minD) * 0.42;
+    const fs   = Math.min(minD * 0.075, fitW / Math.max(8, txt.length * 0.46));
+    const isTop = branding.position.startsWith('top');
+
+    if (shapeKind === 'circle' && branding.style === 'outline') {
+      // Curved text along a half-width arc on the rim.
+      const cx = W/2, cy = H/2, rT = minD/2 * 0.50;
+      const d = isTop
+        ? `M ${cx-rT},${cy} A ${rT},${rT} 0 0 1 ${cx+rT},${cy}`
+        : `M ${cx+rT},${cy} A ${rT},${rT} 0 0 1 ${cx-rT},${cy}`;
+      defs.appendChild(el('path', { id: 'brand-arc', d, fill: 'none' }));
+      const t = el('text', {
+        'font-family': IMPACT_FONT, 'font-weight': 'bold', 'font-size': fs * 0.92,
+        fill: STAMP_GREEN,
+      });
+      const tp = el('textPath', { href: '#brand-arc', startOffset: '50%', 'text-anchor': 'middle' });
+      tp.textContent = txt;
+      t.appendChild(tp);
+      g.appendChild(t);
+    } else if (branding.style === 'banner') {
+      // Solid bar (half-width, centered) with reversed-out white text.
+      const bh = fs * 1.5;
+      const by = isTop ? 0 : H - bh;
+      const bw = W / 2;                  // half the shape width
+      const bx = (W - bw) / 2;           // centered
+      g.appendChild(el('rect', { x: bx, y: by, width: bw, height: bh, fill: GREEN_PARTY }));
+      const t = el('text', {
+        x: W/2, y: by + bh/2, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+        'font-family': IMPACT_FONT, 'font-weight': 'bold', 'font-size': fs, fill: '#fff',
+      });
+      t.textContent = txt;
+      g.appendChild(t);
+    } else {
+      // Straight Impact-outline text — half-width stamp, centered on the edge.
+      const padY = (shapeKind === 'hexagon' ? 0.16 : 0.05) * H;
+      const y = isTop ? padY + fs : H - padY;
+      const t = el('text', {
+        x: W/2, y, 'text-anchor': 'middle',
+        'font-family': IMPACT_FONT, 'font-weight': 'bold', 'font-size': fs,
+        fill: STAMP_GREEN,
+      });
+      t.textContent = txt;
       g.appendChild(t);
     }
   }

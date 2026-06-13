@@ -1,7 +1,25 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { FontLoader, type Font } from 'three/examples/jsm/loaders/FontLoader.js';
+import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
+import helvFont from 'three/examples/fonts/helvetiker_bold.typeface.json';
 import { Status } from './status';
+
+// Parsed once and reused — used to extrude the branding stamp in the 3D map.
+let _brandFont: Font | null = null;
+function brandFont(): Font { return (_brandFont ??= new FontLoader().parse(helvFont as any)); }
+const STAMP_GREEN = 0x00B140;
+
+// Build a flat hexagon ShapeGeometry lying in the XZ plane.
+function _hexShape(r: number, sides = 6): THREE.ShapeGeometry {
+  const pts: THREE.Vector2[] = Array.from({ length: sides }, (_, i) => {
+    const a = ((i / sides) * Math.PI * 2) - Math.PI / 6;
+    return new THREE.Vector2(r * Math.cos(a), r * Math.sin(a));
+  });
+  const shape = new THREE.Shape(pts);
+  return new THREE.ShapeGeometry(shape);
+}
 
 // ── Public types ──────────────────────────────────────────────────────────────
 export interface Viewer3DScene {
@@ -15,6 +33,7 @@ export interface Viewer3DScene {
   stlWater?: string | null;
   stlSolid?: string | null;
   paletteOverrides?: Record<string, string> | null;
+  branding?: { text: string; style: string; position: string } | null;
 }
 
 // ── Material colour tables ─────────────────────────────────────────────────────
@@ -204,19 +223,49 @@ export class Viewer3D {
     ];
     this.osmMats.forEach(m => { m.clippingPlanes = clip; });
 
-    // Ground + border
-    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(SW, SD), this.matGround);
+    // Ground — shape matches the coaster selection
+    const groundGeo = (coasterShape === 'circle') ? new THREE.CircleGeometry(Math.min(SW, SD) / 2, 64)
+      : (coasterShape === 'hexagon') ? _hexShape(Math.min(SW, SD) / 2, 6)
+      : new THREE.PlaneGeometry(SW, SD);
+    this.ground = new THREE.Mesh(groundGeo, this.matGround);
     this.ground.rotation.x = -Math.PI / 2; this.ground.receiveShadow = true;
     scene.add(this.ground);
-    const hw = SW/2, hd = SD/2;
-    scene.add(new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-hw,0.2,-hd), new THREE.Vector3(hw,0.2,-hd),
-        new THREE.Vector3(hw,0.2,hd),   new THREE.Vector3(-hw,0.2,hd),
-        new THREE.Vector3(-hw,0.2,-hd),
-      ]),
-      new THREE.LineBasicMaterial({ color: 0x2244aa }),
-    ));
+
+    // Border outline matching the ground shape
+    const borderY = 0.2;
+    if (coasterShape === 'circle') {
+      const r = Math.min(SW, SD) / 2;
+      scene.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(
+          Array.from({ length: 65 }, (_, i) => {
+            const a = (i / 64) * Math.PI * 2;
+            return new THREE.Vector3(r * Math.cos(a), borderY, r * Math.sin(a));
+          })
+        ),
+        new THREE.LineBasicMaterial({ color: 0x2244aa }),
+      ));
+    } else if (coasterShape === 'hexagon') {
+      scene.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(
+          Array.from({ length: 7 }, (_, i) => {
+            const a = ((i % 6) / 6) * Math.PI * 2 - Math.PI / 6;
+            const r = Math.min(SW, SD) / 2;
+            return new THREE.Vector3(r * Math.cos(a), borderY, r * Math.sin(a));
+          })
+        ),
+        new THREE.LineBasicMaterial({ color: 0x2244aa }),
+      ));
+    } else {
+      const hw = SW / 2, hd = SD / 2;
+      scene.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(-hw, borderY, -hd), new THREE.Vector3(hw, borderY, -hd),
+          new THREE.Vector3(hw, borderY, hd),   new THREE.Vector3(-hw, borderY, hd),
+          new THREE.Vector3(-hw, borderY, -hd),
+        ]),
+        new THREE.LineBasicMaterial({ color: 0x2244aa }),
+      ));
+    }
 
     // Groups
     this.osmGroup = new THREE.Group(); scene.add(this.osmGroup);
@@ -261,11 +310,37 @@ export class Viewer3D {
     const wayPts = (way: any): [number,number][] =>
       (way.nodes??[]).map((id:number) => { const n=nodes.get(id); return n?proj(n[0],n[1]):null; }).filter(Boolean);
 
+    // Branding stamp placement — extruded like the buildings, joins the entry animation,
+    // and clears any buildings beneath it. World: north = −Z, south = +Z; 'bottom' = south.
+    const brand = (s.branding && s.branding.text.trim()) ? s.branding : null;
+    let brandRect: { x0:number; x1:number; z0:number; z1:number } | null = null;
+    let brandPlace: { txt:string; size:number; depth:number; cx:number; cz:number } | null = null;
+    if (brand) {
+      const txt = brand.text.toUpperCase();
+      const minD = Math.min(SW, SD);
+      const size = Math.min(minD * 0.075, (SW * 0.86) / Math.max(8, txt.length * 0.62));
+      const estW = txt.length * 0.62 * size;
+      const margin = minD * 0.08;
+      const isTop = brand.position.startsWith('top');
+      const isLeft = brand.position.endsWith('left');
+      const isRight = brand.position.endsWith('right');
+      const cz = isTop ? (-SD/2 + margin + size*0.7) : (SD/2 - margin - size*0.7);
+      const cx = isLeft ? (-SW/2 + margin + estW/2) : isRight ? (SW/2 - margin - estW/2) : 0;
+      brandPlace = { txt, size, depth: Math.max(3, size*0.35), cx, cz };
+      brandRect  = { x0: cx - estW/2 - margin*0.4, x1: cx + estW/2 + margin*0.4,
+                     z0: cz - size, z1: cz + size };
+    }
+
     let nB = 0;
     for (const way of ways) {
       const tags = way.tags??{};
       if (tags.building && tags.building!=='no') {
         const pts=wayPts(way);
+        if (brandRect && pts.length) {
+          let sx=0, sz=0; for (const [px,py] of pts){ sx+=px; sz+=-py; }   // world z = −proj.y
+          sx/=pts.length; sz/=pts.length;
+          if (sx>=brandRect.x0 && sx<=brandRect.x1 && sz>=brandRect.z0 && sz<=brandRect.z1) continue;
+        }
         const h=parseFloat(tags['building:height']??String(parseFloat(tags['building:levels']??'2')*3.2));
         const m=this._bldgMesh(pts,Math.max(h,3));
         if (m) { this.osmGroup.add(m); nB++; }
@@ -273,6 +348,27 @@ export class Viewer3D {
     }
     this._elText('stats-3d', `${nB} buildings`);
     this._elText('status-3d', '');
+
+    // Build the extruded stamp after the buildings so it joins the same entry animation.
+    if (brandPlace) {
+      try {
+        const geo = new TextGeometry(brandPlace.txt, {
+          font: brandFont(), size: brandPlace.size, depth: brandPlace.depth,
+          curveSegments: 4, bevelEnabled: false,
+        });
+        geo.computeBoundingBox();
+        const bb = geo.boundingBox!;
+        geo.translate(-(bb.max.x+bb.min.x)/2, -(bb.max.y+bb.min.y)/2, 0);
+        geo.rotateX(-Math.PI/2);                       // lie flat, extrude up (+Y)
+        const mat = _mat(STAMP_GREEN, 0x33ff77, { roughness:0.6, metalness:0.1 });
+        mat.wireframe = true; mat.transparent = true; mat.opacity = 0; mat.color.set(mat._wireColor);
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(brandPlace.cx, 0, brandPlace.cz);
+        mesh.castShadow = mesh.receiveShadow = true;
+        this.osmGroup.add(mesh);
+        this.animMats.push(mat); this.allMats.push(mat);   // join the wireframe→solid entry
+      } catch { /* font/extrude failure — skip the stamp */ }
+    }
 
     // Start loop. The building wireframe→solid entry is held back (entryReady stays
     // false) until the SVG fold/translation animation has laid flat — set below.

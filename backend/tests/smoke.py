@@ -159,14 +159,11 @@ def test_license_check(client):
 # ── Error handling ─────────────────────────────────────────────────────────────
 
 def test_generate_svg__bbox_too_large(client):
-    """Bbox covering half of Europe must not return 200 silently with garbage.
+    """Bbox covering half of Europe → 422 from the server-side area guard.
 
-    Overpass enforces max_runtime and memory limits. A huge bbox will either:
-    - Return 502 (timeout / Overpass error)
-    - Return 200 with valid SVG of a mostly-empty map (Overpass allowed it)
-
-    What must NOT happen is a 500 or an SVG that pretends to have data.
-    We check it does NOT return 200 with a normal-sized response.
+    The guard (MAX_BBOX_AREA_KM2) refuses oversized bboxes before any
+    Overpass fetch, so this is fast and deterministic — no more waiting
+    out the 60s+60s Overpass timeouts.
     """
     r = post_json(client, f"{TARGET}/api/generate/svg", json={
         "bbox": {
@@ -175,11 +172,8 @@ def test_generate_svg__bbox_too_large(client):
         "merch_type": "tshirt",
         "style": "osm_default",
     })
-    # 200 means Overpass accepted it and returned a huge map.
-    # 502 means Overpass rejected it (timeout / memory). Both are fine.
-    # 500 means something broke unexpectedly — that's the bug to catch.
-    assert r.status_code != 500, f"Server error on large bbox: {r.text}"
-    assert r.status_code in (200, 502), f"Unexpected {r.status_code}: {r.text}"
+    assert r.status_code == 422, f"Expected 422 from area guard, got {r.status_code}: {r.text}"
+    assert "too large" in r.json().get("detail", ""), r.text
 
 
 def test_generate_svg__invalid_merch(client):

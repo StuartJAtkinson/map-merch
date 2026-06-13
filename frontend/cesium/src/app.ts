@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import { renderSvg, svgToString, svgToBlobUrl, SVG_SPECS } from './svg-renderer';
+import type { Branding, BrandStyle, BrandPos } from './svg-renderer';
 import { Status } from './status';
 
 Cesium.Ion.defaultAccessToken = '';
@@ -1000,6 +1001,16 @@ const SVG_COLOUR_DEFS = [
 ];
 const svgSelIdx = SVG_COLOUR_DEFS.map(() => 0);
 const svgInclLabels = true, svgInclBuildings = true;
+
+// Branding stamp (e.g. "WAKEFIELD GREEN PARTY"). Text fixed for now; structured so
+// other areas/parties can be added later.
+let svgBrandOn = true;
+let svgBrandStyle: BrandStyle = 'outline';
+let svgBrandPos: BrandPos = 'bottom';
+const svgBrandText = 'WAKEFIELD GREEN PARTY';
+function svgBranding(): Branding | null {
+  return svgBrandOn ? { text: svgBrandText, style: svgBrandStyle, position: svgBrandPos } : null;
+}
 let svgNatW = 0, svgNatH = 0, svgTx = 0, svgTy = 0, svgScl = 1;
 let svgCurrentUrl = '';
 let svgCurrentStl: any = null;
@@ -1123,6 +1134,75 @@ function svgInitPicker() {
   });
 }
 
+function svgInitBranding() {
+  const on    = document.getElementById('brand-on')    as HTMLInputElement | null;
+  const style = document.getElementById('brand-style') as HTMLSelectElement | null;
+  const shapeSvg = document.getElementById('brand-shape-svg') as unknown as SVGSVGElement | null;
+  const dotsWrap = document.getElementById('brand-pos-dots');
+  if (!on || !style) return;
+  on.checked = svgBrandOn; style.value = svgBrandStyle;
+
+  // Build the mini shape preview inside the 80×80 SVG.
+  const isCircle  = merchType === 'coaster' && coasterShape === 'circle';
+  const isHex    = merchType === 'coaster' && coasterShape === 'hexagon';
+  const isSquare = merchType === 'coaster' && coasterShape === 'square';
+  if (shapeSvg) {
+    shapeSvg.innerHTML = '';
+    const ns = 'http://www.w3.org/2000/svg';
+    const el = (tag: string, attrs: Record<string, string>) => {
+      const e = document.createElementNS(ns, tag);
+      for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+      return e;
+    };
+    if (isCircle) {
+      shapeSvg.appendChild(el('circle', { cx: '40', cy: '40', r: '34', fill: 'none', stroke: '#5AB031', 'stroke-width': '2' }));
+    } else if (isHex) {
+      const pts = Array.from({ length: 6 }, (_, i) => {
+        const a = (i * 60 - 30) * Math.PI / 180;
+        return `${40 + 34 * Math.cos(a)},${40 + 34 * Math.sin(a)}`;
+      }).join(' ');
+      shapeSvg.appendChild(el('polygon', { points: pts, fill: 'none', stroke: '#5AB031', 'stroke-width': '2' }));
+    } else {
+      // Default rect / square
+      shapeSvg.appendChild(el('rect', { x: '4', y: '4', width: '72', height: '72', rx: '6', fill: 'none', stroke: '#5AB031', 'stroke-width': '2' }));
+    }
+  }
+
+  // Position dots — rect shapes get corners, circles/squares get top/bottom only.
+  const hasCorners = !isCircle;
+  const positions: BrandPos[] = hasCorners
+    ? ['top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right']
+    : ['top', 'bottom'];
+  if (dotsWrap) {
+    dotsWrap.innerHTML = '';
+    for (const pos of positions) {
+      const dot = document.createElement('div');
+      dot.className = 'brand-pos-dot' + (pos === svgBrandPos ? ' active' : '');
+      dot.dataset['pos'] = pos;
+      dot.title = pos.replace('-', ' ');
+      dot.addEventListener('click', () => {
+        svgBrandPos = pos;
+        dotsWrap.querySelectorAll('.brand-pos-dot').forEach(d => d.classList.remove('active'));
+        dot.classList.add('active');
+        svgScheduleRegen();
+      });
+      dotsWrap.appendChild(dot);
+    }
+  }
+
+  // Fallback if current pos isn't in the available set.
+  if (!positions.includes(svgBrandPos)) {
+    svgBrandPos = 'bottom';
+  }
+
+  const sync = () => {
+    svgBrandOn = on.checked;
+    svgBrandStyle = style.value as BrandStyle;
+    svgScheduleRegen();
+  };
+  on.onchange = sync; style.onchange = sync;
+}
+
 function svgScheduleRegen() {
   if (svgRegenTimer) clearTimeout(svgRegenTimer);
   svgRegenTimer = setTimeout(svgRegen, 80);
@@ -1142,6 +1222,7 @@ async function svgRegen() {
       includeLabels:    svgInclLabels,
       includeBuildings: svgInclBuildings,
       paletteOverrides: svgOverrides(),
+      branding:         svgBranding(),
     });
     const text = svgToString(svgEl);
     const blobUrl = svgToBlobUrl(svgEl);
@@ -1177,6 +1258,7 @@ async function openSvgView(url: string, text: string, stlResult: any) {
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r as FrameRequestCallback)));
   await svgShow(text, true);
   svgInitPicker();
+  svgInitBranding();
 }
 
 // ── SVG viewer event listeners ────────────────────────────────────────────────
@@ -1238,6 +1320,7 @@ svg3dBtn.addEventListener('click', async () => {
     stlWater: svgCurrentStl?.stl_water_url ?? null,
     stlSolid: svgCurrentStl?.stl_solid_url ?? null,
     paletteOverrides: svgOverrides(),
+    branding: svgBranding(),
   });
   // (No /api/save-svg — the SVG is a client-side blob; nothing is persisted server-side.)
 });
@@ -1423,6 +1506,7 @@ const abort = new AbortController();
       const svgEl = renderSvg({
         osmData, bbox: bboxArr, merchType,
         coasterShape, includeLabels: true, includeBuildings: true,
+        branding: svgBranding(),
       });
       tPost('svg_rendered', performance.now() - _t0, `${_area} render=${Math.round(performance.now()-t1)}ms`);
       return { svg_url: svgToBlobUrl(svgEl), svgText: svgToString(svgEl) };
