@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # Stripe
     stripe_secret_key: str = ""
 
+    # Email (SendGrid)
+    sendgrid_api_key: str = ""
+    email_from_address: str = "noreply@stuartjatkinson.co.uk"
+    app_base_url: str = "https://heart.stuartjatkinson.co.uk"
+
     # App
     environment: str = "development"  # set ENVIRONMENT=production in deploys
     secret_key: str = "change-me-in-production"
@@ -33,7 +38,7 @@ class Settings(BaseSettings):
 
     # Stored as a plain string; use .get_cors_origins() to get the parsed list.
     # Accepts comma-separated ("a,b") or JSON array ('["a","b"]').
-    cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    cors_origins: str = "http://localhost:3000,http://localhost:5174"
 
     def get_cors_origins(self) -> list[str]:
         try:

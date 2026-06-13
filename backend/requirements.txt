@@ -22,3 +22,5 @@ owslib>=0.31.0
 pyproj>=3.7.2
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
+fonttools>=4.43.0
+brotli>=1.1.0

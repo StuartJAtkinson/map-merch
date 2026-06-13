@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Float, Boolean, JSON, ForeignKey, Integer, Text, func
+from sqlalchemy import String, Float, Boolean, JSON, ForeignKey, Integer, Text, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
@@ -10,6 +10,8 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    reset_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reset_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     projects: Mapped[list["DesignProject"]] = relationship(back_populates="user", lazy="select")

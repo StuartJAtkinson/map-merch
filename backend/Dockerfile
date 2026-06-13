@@ -7,6 +7,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Fonts directory for moat text rendering
+COPY fonts/ /app/fonts/
+
 # Create data output directories
 RUN mkdir -p /data/svg_output /data/stl_output
 

@@ -54,6 +54,8 @@ async def lifespan(app: FastAPI):
     from sqlalchemy import text as _text
     _migrations = [
         ("thumbnail_data_url", "ALTER TABLE design_projects ADD COLUMN thumbnail_data_url TEXT"),
+        ("reset_token", "ALTER TABLE users ADD COLUMN reset_token TEXT"),
+        ("reset_token_expires_at", "ALTER TABLE users ADD COLUMN reset_token_expires_at TIMESTAMP"),
     ]
     driver = str(engine.url.drivername)
     async with engine.begin() as conn:
@@ -105,9 +107,31 @@ svg_generator = SVGGenerator(MERCH_SPECS)
 stl_generator = STLGenerator()
 license_tracker = LicenseTracker()
 
+# Server-side mirror of the frontend's MAX_AREA_KM2 (100 km²), with slack for
+# client/server rounding differences. Oversized bboxes are refused before any
+# Overpass fetch — a huge bbox otherwise ties the server up for ~2 min
+# (60 s primary + 60 s mirror timeout).
+MAX_BBOX_AREA_KM2 = 110.0
+
+
+def _bbox_area_km2(bbox: BBox) -> float:
+    cos_lat = math.cos((bbox.north + bbox.south) / 2 * math.pi / 180)
+    return (bbox.east - bbox.west) * cos_lat * 111.32 * (bbox.north - bbox.south) * 111.32
+
+
+def _guard_bbox(bbox: BBox) -> None:
+    km2 = _bbox_area_km2(bbox)
+    if km2 > MAX_BBOX_AREA_KM2:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Selection too large: {km2:.0f} km² exceeds the "
+                   f"{MAX_BBOX_AREA_KM2:.0f} km² limit.",
+        )
+
 
 @app.post("/api/osm/fetch")
 async def fetch_osm(bbox: BBox):
+    _guard_bbox(bbox)
     data = await osm_fetcher.fetch_area(bbox)
     return {"element_count": len(data.get("elements", [])), "data": data}
 
@@ -116,6 +140,7 @@ async def fetch_osm(bbox: BBox):
 async def get_osm_features(west: float, south: float, east: float, north: float):
     import time as _t
     bbox = BBox(west=west, south=south, east=east, north=north)
+    _guard_bbox(bbox)
     t0 = _t.perf_counter()
     try:
         data = await osm_fetcher.fetch_area(bbox, force_buildings=True)
@@ -134,6 +159,7 @@ async def get_license_info(bbox: BBox):
 
 @app.post("/api/generate/svg")
 async def generate_svg(req: SVGGenerationRequest):
+    _guard_bbox(req.bbox)
     try:
         osm_data = await osm_fetcher.fetch_area(req.bbox)
     except OverpassError as e:
@@ -164,6 +190,7 @@ async def generate_svg(req: SVGGenerationRequest):
 
 @app.post("/api/generate/stl")
 async def generate_stl(req: STLGenerationRequest):
+    _guard_bbox(req.bbox)
     try:
         osm_data = await osm_fetcher.fetch_area(req.bbox, force_buildings=True)
     except OverpassError as e:
@@ -188,6 +215,7 @@ async def generate_stl(req: STLGenerationRequest):
             min_bldg_mm=req.min_bldg_mm,
             collar_mm=req.collar_mm,
             coaster_shape=req.coaster_shape,
+            moat_text=req.moat_text,
         ))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"STL generation failed: {e}")
@@ -281,8 +309,8 @@ async def estimateGeneration(req: SVGGenerationRequest):
     t0 = _t.perf_counter()
 
     bbox = req.bbox
-    cos_lat = math.cos((bbox.north + bbox.south) / 2 * math.pi / 180)
-    km2 = round((bbox.east - bbox.west) * cos_lat * 111.32 * (bbox.north - bbox.south) * 111.32, 2)
+    _guard_bbox(bbox)
+    km2 = round(_bbox_area_km2(bbox), 2)
 
     # Lightweight count query — no geometry, just element counts per type
     bb = f"{bbox.south},{bbox.west},{bbox.north},{bbox.east}"

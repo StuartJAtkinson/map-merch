@@ -22,6 +22,7 @@ lid down over building tops. The lid physically locks the stack.
 """
 
 import math
+import os
 import requests
 import trimesh
 import numpy as np
@@ -30,8 +31,186 @@ from shapely.geometry import (
     box as shapely_box,
 )
 from shapely.ops import unary_union
+from shapely.affinity import translate as shapely_translate
 from shapely.validation import make_valid
 from io import BytesIO
+
+# ── Moat text rendering ────────────────────────────────────────────────────────
+# Converts a string to a centred shapely Polygon using a bundled Roboto Slab WOFF2.
+# Each character is extracted as an SVG path via fontTools' SVGPathPen, parsed into
+# coordinate rings, and converted to a shapely Polygon.  Characters are assembled
+# left-to-right using their advance widths, then the whole assembly is centred in
+# the plate and placed near the bottom with a small margin.
+
+_FONT_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "RobotoSlab-Regular.woff2")
+_FONT_CACHE: "TTFont | None" = None  # type: ignore[name-defined]
+
+
+def _get_font():
+    """Lazy-load (and cache) the Roboto Slab WOFF2."""
+    global _FONT_CACHE
+    if _FONT_CACHE is None:
+        from fontTools.ttLib import TTFont
+        _FONT_CACHE = TTFont(_FONT_PATH)
+    return _FONT_CACHE
+
+
+def _parse_svg_path(d: str) -> list[tuple[float, float]]:
+    """Parse a fontTools SVG path string into an ordered list of (x, y) points.
+
+    Handles M, L, H, V, C (cubic bezier), Q (quadratic bezier), Z.
+    Q curves are approximated via midpoint subdivision (10 segments).
+    """
+    import re
+    rings: list[tuple[float, float]] = []
+    cur_x, cur_y = 0.0, 0.0
+    # Split into command groups: letter + following numbers
+    tokens = re.findall(r'[MLHVCSQZ][^MLHVCSQZ]*', d)
+    for tok in tokens:
+        c = tok[0]
+        nums = list(map(float, re.findall(r'-?\d+\.?\d*', tok)))
+        if c == 'M':
+            cur_x, cur_y = nums[0], nums[1]
+            rings.append((cur_x, cur_y))
+        elif c == 'L':
+            cur_x, cur_y = nums[0], nums[1]
+            rings.append((cur_x, cur_y))
+        elif c == 'H':
+            cur_x = nums[0]
+            rings.append((cur_x, cur_y))
+        elif c == 'V':
+            cur_y = nums[0]
+            rings.append((cur_x, cur_y))
+        elif c == 'C':
+            # Cubic bezier: (x1,y1,x2,y2,x,y) × ncurves
+            for i in range(0, len(nums), 6):
+                x1, y1, x2, y2, x, y = nums[i:i+6]
+                for t in [0.25, 0.5, 0.75]:
+                    px = (1-t)**3*cur_x + 3*(1-t)**2*t*x1 + 3*(1-t)*t*t*x2 + t**3*x
+                    py = (1-t)**3*cur_y + 3*(1-t)**2*t*y1 + 3*(1-t)*t*t*y2 + t**3*y
+                    rings.append((px, py))
+                cur_x, cur_y = x, y
+        elif c == 'Q':
+            # Quadratic bezier: (x1,y1,x,y) × ncurves
+            for i in range(0, len(nums), 4):
+                x1, y1, x, y = nums[i:i+4]
+                for t in [0.25, 0.5, 0.75]:
+                    px = (1-t)**2*cur_x + 2*(1-t)*t*x1 + t**2*x
+                    py = (1-t)**2*cur_y + 2*(1-t)*t*y1 + t**2*y
+                    rings.append((px, py))
+                cur_x, cur_y = x, y
+        elif c == 'Z':
+            pass  # closed by Polygon handling
+    return rings
+
+
+def _glyph_to_polygon(glyph, units_per_em: float, adv_mm: float) -> Polygon | None:
+    """Extract one glyph's outline as a shapely Polygon.
+
+    glyph is a fontTools _TTGlyphGlyf.  adv_mm is the advance width in plate-mm.
+    Returns None on failure; caller uses a fallback rect.
+    """
+    try:
+        from fontTools.pens.svgPathPen import SVGPathPen
+        glyph_set = glyph.glyphSet
+        pen = SVGPathPen(glyph_set)
+        glyph.draw(pen)
+        d = pen.getCommands()
+        if not d or d == 'Z':
+            return None
+        pts = _parse_svg_path(d)
+        if len(pts) < 3:
+            return None
+        # Scale: font-units → plate-mm
+        pts = [(x / units_per_em * adv_mm, y / units_per_em * adv_mm) for x, y in pts]
+        p = Polygon(pts)
+        if not p.is_valid:
+            p = make_valid(p)
+        return p if not p.is_empty else None
+    except Exception:
+        return None
+
+
+def _make_text_polygon(
+    text: str,
+    plate_w: float,
+    plate_h: float,
+    target_width_mm: float | None = None,
+) -> tuple[Polygon, tuple[float, float, float, float]]:
+    """Convert text string to a centred shapely Polygon in plate-mm coords.
+
+    Returns (polygon, bounds) where bounds = (minx, miny, maxx, maxy) in mm.
+    The polygon is centred horizontally and sits at the bottom with a 2 mm margin.
+    """
+    target_w = target_width_mm or plate_w * 0.70  # 70 % of plate width
+
+    try:
+        tt = _get_font()
+        glyph_set = tt.getGlyphSet()
+        cmap = tt.getBestCmap()
+        units_per_em = float(tt["head"].unitsPerEm)
+
+        char_polys: list[Polygon] = []
+        cur_x = 0.0
+        total_adv = 0.0
+
+        for ch in text:
+            code = ord(ch)
+            glyph_name = cmap.get(code) if cmap else None
+            if glyph_name is None:
+                glyph_name = ".notdef"
+
+            glyph = glyph_set[glyph_name]
+            # Advance width in font-units
+            adv_fu = float(tt["hmtx"].metrics.get(glyph_name, (0, 0))[0])
+            if adv_fu <= 0:
+                adv_fu = units_per_em * 0.6  # fallback for space chars etc.
+            total_adv += adv_fu
+
+        # Scale factor: total text width in font-units → target_w mm
+        scale = target_w / total_adv if total_adv > 0 else 1.0
+
+        for ch in text:
+            code = ord(ch)
+            glyph_name = cmap.get(code) if cmap else None
+            if glyph_name is None:
+                glyph_name = ".notdef"
+
+            glyph = glyph_set[glyph_name]
+            adv_fu = float(tt["hmtx"].metrics.get(glyph_name, (0, 0))[0])
+            if adv_fu <= 0:
+                adv_fu = units_per_em * 0.6
+            adv_mm = adv_fu * scale
+
+            p = _glyph_to_polygon(glyph, units_per_em, adv_mm)
+            if p is None or p.is_empty:
+                p = shapely_box(cur_x, 0, cur_x + adv_mm, adv_mm * 0.7)
+            else:
+                # Translate to cursor position (shapely_translate handles Polygon + MultiPolygon)
+                p = shapely_translate(p, xoff=cur_x)
+            char_polys.append(p)
+            cur_x += adv_mm
+
+        if not char_polys:
+            return shapely_box(0, 0, 1, 1), (0, 0, 1, 1)
+
+        merged = unary_union(char_polys) if len(char_polys) > 1 else char_polys[0]
+
+        # Centre horizontally and snap to bottom with 2 mm margin
+        b = merged.bounds
+        text_w = b[2] - b[0]
+        text_h = b[3] - b[1]
+        shift_x = (plate_w - text_w) / 2 - b[0]
+        shift_y = 2.0 - b[1]  # 2 mm bottom margin
+
+        centred = Polygon(
+            [(px + shift_x, py + shift_y) for px, py in merged.exterior.coords]
+        ) if hasattr(merged, "exterior") else merged
+
+        return centred, centred.bounds
+
+    except Exception as exc:
+        return shapely_box(0, 0, plate_w * 0.5, 2), (0, 0, plate_w * 0.5, 2)
 
 
 # Physical plate size (mm) per merch type
@@ -100,6 +279,8 @@ class STLGenerator:
         min_bldg_mm:     float = MIN_BLDG_H,
         collar_mm:       float = 1.0,
         coaster_shape:   str   = 'square',
+        # Moat text: "WAKEFIELD GREEN PARTY" carved through land, surrounded by blue water
+        moat_text: str | None = None,
         # Legacy compat
         height_mm: float = BLDG_H_DEFAULT,
         base_thickness_mm: float = 2.0,
@@ -145,6 +326,7 @@ class STLGenerator:
             gap_close_mm, water_expand_mm, min_bldg_mm, self._collar,
             road_widths, waterway_widths,
             topology, elev_grid, active_shape,
+            moat_text=moat_text,
         )
 
     # ── Main build ─────────────────────────────────────────────────────────────
@@ -156,6 +338,7 @@ class STLGenerator:
         gap_close, water_expand, min_bldg, collar,
         road_widths, waterway_widths,
         topology, elev_grid, coaster_shape: str = 'square',
+        moat_text: str | None = None,
     ) -> dict[str, BytesIO]:
 
         # ── 1. Collect raw shapes ──────────────────────────────────────────────
@@ -230,10 +413,18 @@ class STLGenerator:
         water_meshes = self._water_piece(
             water_union, urban_union, plate_shape, water_start, water_end,
         )
-        land_meshes  = self._land_piece(
+        land_meshes, moat_channel = self._land_piece(
             urban_union, water_union, plate_shape, outer_shape,
             land_start, land_end, topology, elev_grid,
+            moat_text=moat_text,
         )
+        # Add moat channel to the water piece so it renders blue (water material)
+        if moat_channel is not None and not moat_channel.is_empty:
+            chan_thick = max(land_end - land_start, 0.5)
+            for p in _geom_parts(moat_channel):
+                m = _extrude(p, chan_thick, z_base=land_start)
+                if m:
+                    water_meshes.append(m)
         return {
             'buildings': _export(bldg_meshes),
             'water':     _export(water_meshes),
@@ -317,13 +508,19 @@ class STLGenerator:
     # ── Land piece (top lid) ──────────────────────────────────────────────────
     # Fits inside the collar (buildings layer handles the frame).
     # Holes for buildings/roads (they protrude through) and water bodies (recessed).
+    # If moat_text is set, the text polygon is carved from the land lid; the
+    # expanded channel shape is returned separately so _build can add it to the
+    # water piece (blue) — creating green letters surrounded by blue water.
+    #
+    # Returns (land_meshes, moat_channel_shape | None)
 
     def _land_piece(
         self, urban_union, water_union,
         plate_shape, outer_shape,
         land_start, land_end,
         topology, elev_grid,
-    ) -> list[trimesh.Trimesh]:
+        moat_text: str | None = None,
+    ) -> tuple[list[trimesh.Trimesh], Polygon | None]:
         # 0.1 mm inset — land sits flush against the collar inner wall
         inner_plate = plate_shape.buffer(-0.1)
         lid_shape = inner_plate if not inner_plate.is_empty else plate_shape
@@ -331,6 +528,18 @@ class STLGenerator:
             lid_shape = make_valid(lid_shape.difference(urban_union))
         if not water_union.is_empty:
             lid_shape = make_valid(lid_shape.difference(water_union.intersection(plate_shape)))
+
+        # Moat text: carve the text polygon from the land lid
+        moat_channel_shape: Polygon | None = None
+        if moat_text:
+            bounds = plate_shape.bounds
+            pw = bounds[2] - bounds[0]
+            ph = bounds[3] - bounds[1]
+            text_poly, _ = _make_text_polygon(moat_text, pw, ph)
+            if text_poly and not text_poly.is_empty:
+                lid_shape = make_valid(lid_shape.difference(text_poly))
+                # 1.5 mm margin around text → the water channel that surrounds it
+                moat_channel_shape = text_poly.buffer(1.5)
 
         # Simplify before extrusion — dense urban areas on small plates (e.g. coaster)
         # produce complex polygons with many tight holes that can cause trimesh failures.
@@ -344,12 +553,13 @@ class STLGenerator:
                 m = _extrude(p, thickness, z_base=land_start)
                 if m:
                     meshes.append(m)
-            return meshes
+            return meshes, moat_channel_shape
         else:
             bounds = plate_shape.bounds  # (minx, miny, maxx, maxy)
             pw, ph = bounds[2] - bounds[0], bounds[3] - bounds[1]
-            return self._terrain_lid(lid_shape, elev_grid, pw, ph,
-                                     land_start, land_end)
+            terrain_meshes = self._terrain_lid(lid_shape, elev_grid, pw, ph,
+                                               land_start, land_end)
+            return terrain_meshes, moat_channel_shape
 
     def _terrain_lid(self, land_shape, elev_grid, plate_w, plate_h, z_bottom, z_top):
         terrain = _build_terrain_mesh(elev_grid, plate_w, plate_h, z_bottom, z_top - z_bottom)
