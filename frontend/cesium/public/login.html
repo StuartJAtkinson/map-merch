@@ -192,21 +192,55 @@
   </div>
 
   <!-- ── Reset password view ── -->
+  <!-- Two modes: request (no token in URL) or set-new-password (?token=xxx) -->
   <div class="view" id="view-reset">
-    <div class="view-title">Reset your password</div>
 
-    <div class="info-box">
-      <div class="info-tag">App in development</div>
-      <p>
-        Automated password reset isn't available yet — Heart on a Sleeve is still being built.
-      </p>
-      <p>
-        If you need your password reset, email Stuart directly:<br>
-        <a href="mailto:stuart.john.atkinson@gmail.com">stuart.john.atkinson@gmail.com</a>
-      </p>
+    <!-- Request mode: enter email to receive reset link -->
+    <div id="reset-request-view">
+      <div class="view-title">Reset your password</div>
+      <div class="info-box">
+        <p>Enter your email and we'll send you a link to set a new password. The link expires after 1 hour.</p>
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="reset-req-email" placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div id="error-reset-req" style="font-size:12px;color:#e07070;min-height:15px;margin-bottom:10px;"></div>
+      <button class="btn-primary" id="reset-req-btn">Send reset link</button>
+      <div class="switch-row" style="margin-top:12px;">
+        Remember your password?
+        <span class="switch-link" id="reset-go-login">Sign in</span>
+      </div>
     </div>
 
-    <button class="btn-primary" id="reset-back-btn">← Back to sign in</button>
+    <!-- Sent confirmation -->
+    <div id="reset-sent-view" style="display:none">
+      <div class="view-title">Check your email</div>
+      <div class="info-box">
+        <p>If <strong id="reset-sent-to"></strong> is registered, you will receive a password reset link shortly. Check your spam folder if it doesn't arrive.</p>
+      </div>
+      <div class="switch-row">
+        Didn't get it?
+        <span class="switch-link" id="reset-go-request">Try again</span>
+      </div>
+    </div>
+
+    <!-- Set new password mode (active when ?token=xxx is in URL) -->
+    <div id="reset-set-view" style="display:none">
+      <div class="view-title">Set a new password</div>
+      <div class="field">
+        <label>New password <span style="color:var(--text-faint);font-size:10px;">(8+ characters)</span></label>
+        <input type="password" id="reset-password" placeholder="••••••••" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label>Confirm password</label>
+        <input type="password" id="reset-password-confirm" placeholder="••••••••" autocomplete="new-password">
+      </div>
+      <div id="error-reset-set" style="font-size:12px;color:#e07070;min-height:15px;margin-bottom:10px;"></div>
+      <button class="btn-primary" id="reset-set-btn">Save new password</button>
+    </div>
+
+    <div class="back-row" style="margin-top:14px;"><a href="/">← Back to map</a></div>
   </div>
 
 </div>
@@ -228,8 +262,10 @@ document.getElementById('go-login').addEventListener('click', () => {
   clearErrors();
   show('view-login');
 });
-document.getElementById('show-reset').addEventListener('click', () => show('view-reset'));
-document.getElementById('reset-back-btn').addEventListener('click', () => show('view-login'));
+document.getElementById('show-reset').addEventListener('click', () => showResetRequest());
+document.getElementById('reset-go-login').addEventListener('click', () => show('view-login'));
+document.getElementById('reset-go-request').addEventListener('click', () => showResetRequest());
+document.getElementById('reset-set-btn').addEventListener('click', doResetSet);
 
 function clearErrors() {
   document.getElementById('error-login').textContent    = '';
@@ -304,6 +340,88 @@ function storeTokens(data) {
   localStorage.setItem('hoas_refresh', data.refresh_token);
   localStorage.setItem('hoas_email',   data.email);
 }
+
+// ── Reset password flow ─────────────────────────────────────────────────────────
+
+const resetToken = params.get('token');
+
+function showResetRequest() {
+  document.getElementById('reset-request-view').style.display = '';
+  document.getElementById('reset-sent-view').style.display    = 'none';
+  document.getElementById('reset-set-view').style.display     = 'none';
+  show('view-reset');
+}
+
+function showResetSent(email) {
+  document.getElementById('reset-request-view').style.display = 'none';
+  document.getElementById('reset-sent-view').style.display    = '';
+  document.getElementById('reset-sent-to').textContent       = email;
+  document.getElementById('reset-set-view').style.display     = 'none';
+  show('view-reset');
+}
+
+function showResetSet() {
+  document.getElementById('reset-request-view').style.display = 'none';
+  document.getElementById('reset-sent-view').style.display    = 'none';
+  document.getElementById('reset-set-view').style.display     = '';
+  show('view-reset');
+}
+
+// If loaded with a token, go straight to the set-password form
+if (resetToken) {
+  showResetSet();
+}
+
+// Request a reset email
+async function doResetRequest() {
+  const email    = document.getElementById('reset-req-email').value.trim();
+  const errorEl  = document.getElementById('error-reset-req');
+  const btn      = document.getElementById('reset-req-btn');
+  if (!email) { errorEl.textContent = 'Email is required.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Sending…'; errorEl.textContent = '';
+  try {
+    await apiCall('/api/auth/forgot-password', { email });
+    showResetSent(email);
+  } catch (e) {
+    // Always show success even on error — don't reveal account existence
+    showResetSent(email);
+  }
+}
+document.getElementById('reset-req-btn').addEventListener('click', doResetRequest);
+document.getElementById('reset-req-email').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doResetRequest();
+});
+
+// Set new password (token from URL)
+async function doResetSet() {
+  const password  = document.getElementById('reset-password').value;
+  const confirm  = document.getElementById('reset-password-confirm').value;
+  const errorEl  = document.getElementById('error-reset-set');
+  const btn      = document.getElementById('reset-set-btn');
+
+  if (!password)                       { errorEl.textContent = 'Password is required.'; return; }
+  if (password.length < 8)              { errorEl.textContent = 'Password must be at least 8 characters.'; return; }
+  if (password !== confirm)             { errorEl.textContent = 'Passwords do not match.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Saving…'; errorEl.textContent = '';
+  try {
+    await apiCall('/api/auth/reset-password', { token: resetToken, password });
+    errorEl.style.color = '#4a9a4a';
+    errorEl.textContent = 'Password updated! Redirecting to sign in…';
+    setTimeout(() => show('view-login'), 1500);
+  } catch (e) {
+    errorEl.style.color = '#e07070';
+    errorEl.textContent = e.message;
+    btn.disabled = false; btn.textContent = 'Save new password';
+  }
+}
+document.getElementById('reset-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doResetSet();
+});
+document.getElementById('reset-password-confirm').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doResetSet();
+});
 </script>
 </body>
 </html>
