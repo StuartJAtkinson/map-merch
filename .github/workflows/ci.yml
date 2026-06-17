@@ -252,7 +252,7 @@ jobs:
           image: ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/hoas/hoas-backend:${{ github.sha }}
           env_vars: |
             ENVIRONMENT=production
-            CORS_ORIGINS=${{ vars.FRONTEND_URL || 'https://heart.stuartjatkinson.co.uk' }}
+            CORS_ORIGINS=${{ vars.FRONTEND_URL || 'https://green.stuartjatkinson.co.uk' }}
           secrets: |
             DATABASE_URL=hoas-database-url:latest
             SECRET_KEY=hoas-secret-key:latest

@@ -77,6 +77,10 @@ app = FastAPI(title="Heart on a Sleeve API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.get_cors_origins(),
+    # Allow both prod subdomains (green.* and heart.*) without threading a
+    # comma-separated CORS_ORIGINS through the deploy action (which treats
+    # commas as env-var delimiters). localhost stays in get_cors_origins().
+    allow_origin_regex=r"^https://(green|heart)\.stuartjatkinson\.co\.uk$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

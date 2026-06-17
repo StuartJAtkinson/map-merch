@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     # Email (SendGrid)
     sendgrid_api_key: str = ""
     email_from_address: str = "noreply@stuartjatkinson.co.uk"
-    app_base_url: str = "https://heart.stuartjatkinson.co.uk"
+    app_base_url: str = "https://green.stuartjatkinson.co.uk"
 
     # App
     environment: str = "development"  # set ENVIRONMENT=production in deploys

@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, EmailStr
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import (
     hash_password, verify_password,
@@ -16,6 +17,7 @@ from app.services.email import send_email
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 _bearer = HTTPBearer()
+settings = get_settings()
 
 
 class RegisterRequest(BaseModel):
@@ -131,7 +133,7 @@ async def forgot_password(req: ForgotPasswordRequest, db: AsyncSession = Depends
     user.reset_token_expires_at = expires_at
     await db.commit()
 
-    reset_url = f"https://heart.stuartjatkinson.co.uk/reset?token={token}"
+    reset_url = f"{settings.app_base_url.rstrip('/')}/reset?token={token}"
     await send_email(
         to=user.email,
         subject="Reset your Heart on a Sleeve password",
