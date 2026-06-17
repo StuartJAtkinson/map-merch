@@ -34,6 +34,10 @@ from shapely.ops import unary_union
 from shapely.affinity import translate as shapely_translate
 from shapely.validation import make_valid
 from io import BytesIO
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from fontTools.ttLib import TTFont
 
 # ── Moat text rendering ────────────────────────────────────────────────────────
 # Converts a string to a centred shapely Polygon using a bundled Roboto Slab WOFF2.
@@ -43,7 +47,7 @@ from io import BytesIO
 # the plate and placed near the bottom with a small margin.
 
 _FONT_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "RobotoSlab-Regular.woff2")
-_FONT_CACHE: "TTFont | None" = None  # type: ignore[name-defined]
+_FONT_CACHE: "TTFont | None" = None
 
 
 def _get_font():
@@ -199,7 +203,6 @@ def _make_text_polygon(
         # Centre horizontally and snap to bottom with 2 mm margin
         b = merged.bounds
         text_w = b[2] - b[0]
-        text_h = b[3] - b[1]
         shift_x = (plate_w - text_w) / 2 - b[0]
         shift_y = 2.0 - b[1]  # 2 mm bottom margin
 
@@ -209,7 +212,7 @@ def _make_text_polygon(
 
         return centred, centred.bounds
 
-    except Exception as exc:
+    except Exception:
         return shapely_box(0, 0, plate_w * 0.5, 2), (0, 0, plate_w * 0.5, 2)
 
 

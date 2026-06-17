@@ -9,6 +9,7 @@ from app.core.security import (
     hash_password, verify_password,
     create_access_token, create_refresh_token,
     create_reset_token, verify_reset_token,
+    decode_token,
 )
 from app.models.db_models import User
 from app.services.email import send_email
