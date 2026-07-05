@@ -53,22 +53,22 @@ async def lifespan(app: FastAPI):
     # Add columns introduced after initial schema without a full migration tool
     from sqlalchemy import text as _text
     _migrations = [
-        ("thumbnail_data_url", "ALTER TABLE design_projects ADD COLUMN thumbnail_data_url TEXT"),
-        ("reset_token", "ALTER TABLE users ADD COLUMN reset_token TEXT"),
-        ("reset_token_expires_at", "ALTER TABLE users ADD COLUMN reset_token_expires_at TIMESTAMP"),
+        ("design_projects", "thumbnail_data_url", "TEXT"),
+        ("users", "reset_token", "TEXT"),
+        ("users", "reset_token_expires_at", "TIMESTAMP"),
     ]
     driver = str(engine.url.drivername)
-    async with engine.begin() as conn:
-        for col, sql in _migrations:
-            try:
+    for table, col, coltype in _migrations:
+        try:
+            async with engine.begin() as conn:
                 if 'postgresql' in driver:
                     await conn.execute(_text(
-                        f"ALTER TABLE design_projects ADD COLUMN IF NOT EXISTS {col} TEXT"
+                        f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {coltype}"
                     ))
                 else:
-                    await conn.execute(_text(sql))
-            except Exception as exc:
-                log.debug("migration for column %s skipped (likely exists): %s", col, exc)
+                    await conn.execute(_text(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}"))
+        except Exception as exc:
+            log.debug("migration for %s.%s skipped (likely exists): %s", table, col, exc)
     yield
 
 
