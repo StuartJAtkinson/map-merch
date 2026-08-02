@@ -14,7 +14,7 @@ jobs:
     name: Lint backend (ruff)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -26,7 +26,7 @@ jobs:
     name: Type-check frontend (tsc)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -41,7 +41,7 @@ jobs:
     name: Scan for secrets (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # full history — catches secrets in old commits too
       - name: Install gitleaks
@@ -59,7 +59,7 @@ jobs:
     name: Smoke tests (pytest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -88,7 +88,7 @@ jobs:
     name: Build backend image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v7
         with:
@@ -102,7 +102,7 @@ jobs:
     name: Build frontend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -135,7 +135,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set lowercase owner
         run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
       - uses: docker/setup-buildx-action@v4
@@ -199,7 +199,7 @@ jobs:
     env:
       REGION: ${{ vars.GCP_REGION || 'europe-west2' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
