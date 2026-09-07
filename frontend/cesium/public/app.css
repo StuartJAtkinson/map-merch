@@ -332,10 +332,10 @@ body {
 .brand-row input { accent-color: var(--accent); }
 .brand-controls { display: flex; gap: 6px; }
 .brand-select {
-  flex: 1; min-width: 0; font-size: 11px; font-family: inherit;
+  flex: 1; min-width: 0; font-size: 13px; font-family: inherit;
   background: var(--bg-item); color: var(--text-primary);
   border: 1.5px solid var(--border-dim); border-radius: var(--radius-input);
-  padding: 6px 7px; outline: none; cursor: pointer;
+  padding: 8px 10px; outline: none; cursor: pointer;
 }
 .brand-select:focus { border-color: var(--accent); }
 
