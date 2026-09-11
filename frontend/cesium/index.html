@@ -153,8 +153,8 @@
         #designs-logout { color: var(--color-danger); border-color: var(--border-dim); }
         #designs-logout:hover { border-color: var(--color-danger); background: var(--color-danger-soft); }
 
-        /* Save section — lives at bottom of svg-side panel */
-        #svg-save-section { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+        /* Save section lives at the bottom of the svg-side panel; it already
+           carries class="save-section", which app.css:328 styles identically. */
         /* User nav rendered into .user-nav-slot */
         .user-email-display { font-size: 11px; color: var(--text-dim); padding: 4px 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .nav-designs-btn { margin-bottom: 4px; }
@@ -236,13 +236,6 @@
         .designs-loading, .designs-empty {
             font-size: 13px; color: var(--text-dim); padding: 32px 0; text-align: center;
         }
-        .btn-danger {
-            flex: 1; padding: 5px 3px; font-size: 11px;
-            background: transparent; border: 1px solid var(--border-dim);
-            color: var(--color-danger); border-radius: var(--radius-btn);
-            font-family: inherit; cursor: pointer; transition: all 0.12s;
-        }
-        .btn-danger:hover { border-color: var(--color-danger); background: var(--color-danger-soft); }
 
         /* ── Mobile ───────────────────────────────────────────────────────── */
         @media (max-width: 900px) {
@@ -292,6 +285,26 @@
             z-index: 10000; overflow-y: auto;
           }
           #canvas-wrap-3d {
+            position: fixed !important; inset: 0;
+            width: 100% !important; height: 100svh !important; height: 100vh !important;
+          }
+
+          /* Print viewer — same drag-up sheet as #panel, #svg-side and #panel3d.
+             It was the only one of the four left as a desktop sidebar on mobile. */
+          #panel-print {
+            position: fixed !important;
+            bottom: 0; left: 0; right: 0; top: auto !important;
+            width: 100% !important; height: auto !important;
+            max-height: 75svh; max-height: 75vh;
+            border-radius: 14px 14px 0 0;
+            border-left: none; border-right: none; border-bottom: none;
+            padding-top: 10px;
+            transform: translateY(calc(100% - 80px));
+            transition: transform 0.3s cubic-bezier(.25,.8,.3,1);
+            z-index: 10000; overflow-y: auto;
+          }
+          #panel-print.sheet-open { transform: translateY(0); }
+          #canvas-wrap-print {
             position: fixed !important; inset: 0;
             width: 100% !important; height: 100svh !important; height: 100vh !important;
           }

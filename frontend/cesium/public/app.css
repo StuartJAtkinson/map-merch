@@ -57,8 +57,10 @@ body {
 
 /* ── App shell ──────────────────────────────────────────────────────────────
    Every view shares one layout: a fixed-width sidebar + a flexible stage
-   (map / SVG / 3D / print), with the status bar reserved as a strip below. */
-.view    { display: flex; }
+   (map / SVG / 3D / print), with the status bar reserved as a strip below.
+   NB: there is deliberately no `.view` rule here. The viewers are ids
+   (#svg-view, #viewer-3d-view, #viewer-print-view); `.view` belongs to
+   login.html's view-switcher, where it means display:none until .active. */
 .sidebar { width: 280px; flex-shrink: 0; height: calc(100vh - 22px); overflow-y: auto; }
 .stage   { flex: 1; position: relative; overflow: hidden; height: calc(100vh - 22px); }
 
@@ -422,3 +424,13 @@ body {
   margin: 0 auto 2px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Destructive action button — shared by index.html and dashboard.html, which
+   each carried an identical private copy until 2026-09-11. */
+.btn-danger {
+  flex: 1; padding: 5px 3px; font-size: 11px;
+  background: transparent; border: 1px solid var(--border-dim);
+  color: var(--color-danger); border-radius: var(--radius-btn);
+  font-family: inherit; cursor: pointer; transition: all 0.12s;
+}
+.btn-danger:hover { border-color: var(--color-danger); background: var(--color-danger-soft); }

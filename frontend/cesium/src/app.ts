@@ -1894,9 +1894,6 @@ async function renderDesigns(): Promise<void> {
     const MERCH_EMOJI: Record<string, string> = {
       tshirt: '👕', mug: '☕', tote: '👜', coaster: '⬜', placemat: '🟫', '3d_print': '⛰',
     };
-    const MERCH_LABEL: Record<string, string> = {
-      tshirt: 'T-Shirt', mug: 'Mug', tote: 'Tote Bag', coaster: 'Coaster', placemat: 'Placemat', '3d_print': 'Relief',
-    };
 
     function esc(s: string): string {
       return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -1912,7 +1909,7 @@ async function renderDesigns(): Promise<void> {
         <div class="design-card">
           <div class="design-thumb">${thumb}</div>
           <div class="design-name">${esc(displayName(p, projects))}</div>
-          <div class="design-meta">${emoji} ${MERCH_LABEL[p.merch_type] || p.merch_type}<br>${date}</div>
+          <div class="design-meta">${emoji} ${MERCH_LABELS[p.merch_type] || p.merch_type}<br>${date}</div>
           <div class="design-actions">
             <button class="btn design-load-btn" data-id="${p.id}">↩ Open</button>
             <button class="btn-danger design-del-btn" title="Delete design" aria-label="Delete design" data-id="${p.id}">✕</button>
