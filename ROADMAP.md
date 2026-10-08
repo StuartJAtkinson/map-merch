@@ -1,5 +1,57 @@
 # Heart on a Sleeve — Build Roadmap
 
+> **Auto Continue reads this file.** The `feature` phase takes the first unchecked
+> `- [ ]` line below as its whole brief and ticks it by exact text, so milestones and
+> phases are headings and every slice is one commit-sized, self-contained line.
+> **Human-only** items carry no checkbox, so Auto never picks them up.
+
+**Now:** Milestone 2 — *Live*. Milestone 1 (Phases 1–6 and 9 below, the SPA consolidation
+and the preflight gate) is shipped. Unchecked items that used to sit inside finished phases
+are listed here in execution order; the phase sections keep them as plain notes.
+
+## Execution order
+
+### Milestone 2 — Live (Phase 10 remainder)
+
+- [ ] Alembic migrations (currently using `create_all` — fine for new deploys, not for schema changes) *(Phase 10 — Deployment)*
+- [ ] Rate limiting on Overpass calls *(Phase 10 — Deployment)*
+
+### Milestone 3 — Commerce (Phases 7–8)
+
+- [ ] WooCommerce REST API client *(Phase 7 — WooCommerce Integration)*
+- [ ] Create product from design project *(Phase 7 — WooCommerce Integration)*
+- [ ] Price calculation: base cost + configurable markup *(Phase 7 — WooCommerce Integration)*
+- [ ] Order submission to POD provider *(Phase 7 — WooCommerce Integration)*
+- [ ] Webhook handlers *(Phase 7 — WooCommerce Integration)*
+- [ ] Prodigi API: POST /orders, upload print file *(Phase 8 — POD Providers)*
+- [ ] Printful API: fallback/DTG coverage *(Phase 8 — POD Providers)*
+- [ ] Fulfillment webhook → update order status *(Phase 8 — POD Providers)*
+- [ ] Order history + re-order *(deferred to Phase 7/8)* *(Phase 9 — User Auth & Dashboard)*
+
+### Milestone 4 — Polish (leftovers from finished phases)
+
+- [ ] Mug wrap perspective *(Phase 2 — SVG Generation)*
+- [ ] SVG validation *(Phase 2 — SVG Generation)*
+- [ ] Watertight mesh validation *(Phase 3 — STL / 3D Generation)*
+- [ ] Hollowing for large prints *(Phase 3 — STL / 3D Generation)*
+- [ ] Terrain side walls (fully closed solid) *(Phase 3 — STL / 3D Generation)*
+- [ ] SVG `<metadata>` block with CC namespace *(Phase 4 — Licence Tracker)*
+- [ ] PDF licence report export *(Phase 4 — Licence Tracker)*
+- [ ] User-uploaded asset licence detection *(Phase 4 — Licence Tracker)*
+- [ ] Preset location dropdown *(Phase 5 — CesiumJS Frontend)*
+- [ ] Scale bar *(Phase 5 — CesiumJS Frontend)*
+- [ ] Geolocation *(Phase 5 — CesiumJS Frontend)*
+- [ ] EPSG:27700 coordinate display *(Phase 5 — CesiumJS Frontend)*
+- [ ] **SSE streaming progress** from SVG/STL generators so transition bar tracks real server progress *(deferred — requires backend chunked-response endpoint)* *(Phase 5 — CesiumJS Frontend)*
+- [ ] Terrain elevation in live render (SRTM) *(Phase 5c — 3D Map Viewer)*
+- [ ] Roof shapes *(Phase 5c — 3D Map Viewer)*
+- [ ] Street-level textures *(Phase 5c — 3D Map Viewer)*
+- [ ] Share design (public view-only link) *(future)* *(Phase 9 — User Auth & Dashboard)*
+
+### Human-only
+
+- **Custom domain** — `heart.stuartjatkinson.co.uk` custom domain + TLS (Cloud Run domain mapping + DNS): needs the DNS record at the registrar.
+
 ## Overview
 A platform where users select a location on a stylised OSM map, choose a merch product (placemat, coaster, t-shirt, mug, tote, 3D print), and the system generates print-ready SVG or STL files — with live 2D and 3D preview, handling licences, WooCommerce product creation, and POD fulfillment automatically.
 
@@ -185,8 +237,8 @@ git push origin main
 - [x] Bbox passed from request (not derived from node spread)
 - [x] Proper coordinate projection (pyproj EPSG:27700 for UK)
 - [x] Bleed margins
-- [ ] Mug wrap perspective
-- [ ] SVG validation
+- Mug wrap perspective *(→ M4)*
+- SVG validation *(→ M4)*
 
 ---
 
@@ -211,9 +263,9 @@ Three interlocking pieces per print:
 - [x] SRTM elevation via OpenTopoData (topology mode, 10×10 grid)
 - [x] shapely `make_valid` for degenerate polygons
 - [x] mapbox-earcut installed for trimesh triangulation
-- [ ] Watertight mesh validation
-- [ ] Hollowing for large prints
-- [ ] Terrain side walls (fully closed solid)
+- Watertight mesh validation *(→ M4)*
+- Hollowing for large prints *(→ M4)*
+- Terrain side walls (fully closed solid) *(→ M4)*
 
 ---
 
@@ -221,9 +273,9 @@ Three interlocking pieces per print:
 
 - [x] ODbL attribution returned on every generate request
 - [x] Attribution embedded in SVG `<text>` element
-- [ ] SVG `<metadata>` block with CC namespace
-- [ ] PDF licence report export
-- [ ] User-uploaded asset licence detection
+- SVG `<metadata>` block with CC namespace *(→ M4)*
+- PDF licence report export *(→ M4)*
+- User-uploaded asset licence detection *(→ M4)*
 
 ---
 
@@ -242,11 +294,11 @@ Three interlocking pieces per print:
 - [x] **Generate transition** — pixelation phases → fake-asymptotic progress bar (tau from bbox-area estimate) → zoom to SVG-viewer fit bounds → pixel-to-SVG cross-dissolve
 - [x] Camera pitch constraints (20°–90° from horizon)
 - [x] **Fabric/transfer types** — "View 3D →" hidden; "↓ Download SVG" highlighted as primary action
-- [ ] Preset location dropdown
-- [ ] Scale bar
-- [ ] Geolocation
-- [ ] EPSG:27700 coordinate display
-- [ ] **SSE streaming progress** from SVG/STL generators so transition bar tracks real server progress *(deferred — requires backend chunked-response endpoint)*
+- Preset location dropdown *(→ M4)*
+- Scale bar *(→ M4)*
+- Geolocation *(→ M4)*
+- EPSG:27700 coordinate display *(→ M4)*
+- **SSE streaming progress** from SVG/STL generators so transition bar tracks real server progress *(deferred — requires backend chunked-response endpoint)* *(→ M4)*
 
 ---
 
@@ -278,9 +330,9 @@ Three interlocking pieces per print:
 - [x] STL download links for all 3 parts
 - [x] **Fabric Preview** — SVG as `TextureLoader` ground plane + buildings-only OSM; hides roads/water/parks (SVG covers them)
 - [x] **Layered print animation** — buildings wireframe fade-in → solid fill; water plate descends from above; land lid descends from above; ease-out cubic on descent phases
-- [ ] Terrain elevation in live render (SRTM)
-- [ ] Roof shapes
-- [ ] Street-level textures
+- Terrain elevation in live render (SRTM) *(→ M4)*
+- Roof shapes *(→ M4)*
+- Street-level textures *(→ M4)*
 
 ---
 
@@ -324,19 +376,19 @@ Moved SVG generation from the Python backend to the browser for Cloud Run scalab
 
 ## Phase 7 — WooCommerce Integration 📋 Planned
 
-- [ ] WooCommerce REST API client
-- [ ] Create product from design project
-- [ ] Price calculation: base cost + configurable markup
-- [ ] Order submission to POD provider
-- [ ] Webhook handlers
+- WooCommerce REST API client *(→ M3)*
+- Create product from design project *(→ M3)*
+- Price calculation: base cost + configurable markup *(→ M3)*
+- Order submission to POD provider *(→ M3)*
+- Webhook handlers *(→ M3)*
 
 ---
 
 ## Phase 8 — POD Providers 📋 Planned
 
-- [ ] Prodigi API: POST /orders, upload print file
-- [ ] Printful API: fallback/DTG coverage
-- [ ] Fulfillment webhook → update order status
+- Prodigi API: POST /orders, upload print file *(→ M3)*
+- Printful API: fallback/DTG coverage *(→ M3)*
+- Fulfillment webhook → update order status *(→ M3)*
 
 ---
 
@@ -349,8 +401,8 @@ Moved SVG generation from the Python backend to the browser for Cloud Run scalab
 - [x] Dashboard — `/dashboard.html` grid of saved projects with thumbnail, open + delete
 - [x] Save button in SVG viewer (both inline and standalone) — prompts login if unauthenticated
 - [x] User nav (Login / My Designs / Logout) in all SVG panels
-- [ ] Order history + re-order *(deferred to Phase 7/8)*
-- [ ] Share design (public view-only link) *(future)*
+- Order history + re-order *(deferred to Phase 7/8)* *(→ M3)*
+- Share design (public view-only link) *(future)* *(→ M4)*
 
 ---
 
@@ -364,9 +416,9 @@ Moved SVG generation from the Python backend to the browser for Cloud Run scalab
 - [x] DB tables auto-created on startup via `Base.metadata.create_all` in lifespan — no manual migration step needed for Cloud Run
 - [x] GitHub Actions CI — ruff lint, tsc typecheck, pytest smoke, build + push images to ghcr.io
 - [x] GitHub Actions CD — deploy to Cloud Run on push to main (dormant until `GCP_PROJECT_ID` repo variable is set)
-- [ ] `heart.stuartjatkinson.co.uk` custom domain + TLS (Cloud Run domain mapping + DNS)
-- [ ] Rate limiting on Overpass calls
-- [ ] Alembic migrations (currently using `create_all` — fine for new deploys, not for schema changes)
+- `heart.stuartjatkinson.co.uk` custom domain + TLS (Cloud Run domain mapping + DNS) *(→ Human-only)*
+- Rate limiting on Overpass calls *(→ M2)*
+- Alembic migrations (currently using `create_all` — fine for new deploys, not for schema changes) *(→ M2)*
 
 ---
 
