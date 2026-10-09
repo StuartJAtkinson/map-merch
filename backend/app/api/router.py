@@ -41,40 +41,10 @@ async def lifespan(app: FastAPI):
             "set the SECRET_KEY environment variable."
         )
     log.info("DB URL driver: %s", engine.url.drivername)
-    if settings.use_alembic_migrations:
-        from app.core.migrations import run_migrations
-        log.info("Running alembic upgrade head")
-        await run_migrations(engine)
-        log.info("alembic upgrade head finished")
-    else:
-        from app.core.database import Base
-        log.info("Metadata tables before create_all: %s", list(Base.metadata.tables.keys()))
-        try:
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            log.info("create_all finished — tables now: %s", list(Base.metadata.tables.keys()))
-        except Exception as exc:
-            log.error("create_all FAILED: %s", exc, exc_info=True)
-            raise
-        # Add columns introduced after initial schema without a full migration tool
-        from sqlalchemy import text as _text
-        _migrations = [
-            ("design_projects", "thumbnail_data_url", "TEXT"),
-            ("users", "reset_token", "TEXT"),
-            ("users", "reset_token_expires_at", "TIMESTAMP"),
-        ]
-        driver = str(engine.url.drivername)
-        for table, col, coltype in _migrations:
-            try:
-                async with engine.begin() as conn:
-                    if 'postgresql' in driver:
-                        await conn.execute(_text(
-                            f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {coltype}"
-                        ))
-                    else:
-                        await conn.execute(_text(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}"))
-            except Exception as exc:
-                log.debug("migration for %s.%s skipped (likely exists): %s", table, col, exc)
+    from app.core.migrations import run_migrations
+    log.info("Running alembic upgrade head")
+    await run_migrations(engine)
+    log.info("alembic upgrade head finished")
     yield
 
 

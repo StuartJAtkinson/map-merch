@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    # Schema comes from backend/alembic via the app's lifespan (USE_ALEMBIC_MIGRATIONS=true).
+    # Schema comes from backend/alembic via the app's lifespan (`alembic upgrade head`).
     # db/init/ was archived — it created orphan tables (osm_data_cache, pod_orders, etc.)
     # and the wrong design_projects schema (spatial bbox, pre-reset_token).
     healthcheck:

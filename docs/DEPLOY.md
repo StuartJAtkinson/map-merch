@@ -62,8 +62,9 @@ gcloud sql users create heart_user \
 
 ### Schema
 
-Schema is managed by `backend/alembic/versions/` and runs on the app's first startup
-when `USE_ALEMBIC_MIGRATIONS=true` is set (already configured in `.github/workflows/ci.yml`).
+Schema is managed by `backend/alembic/versions/`; `alembic upgrade head` runs on every
+app startup (a DB bootstrapped by the old `create_all` path is stamped at the baseline first).
+To change the schema: edit the model, then `cd backend && alembic revision --autogenerate -m "..."`.
 No manual SQL setup required — alembic stamps `alembic_version` and creates the three
 ORM tables (`users`, `design_projects`, `osm_cache`). Previously enabled postgis/btree_gist
 extensions are not used by app code and have been retired.

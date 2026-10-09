@@ -35,10 +35,6 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production"
     port: str = "8080"
     data_dir: str = "/app/data"
-    # Off by default: flips schema bootstrap from create_all + ad-hoc ALTER
-    # TABLE to `alembic upgrade head`. Set USE_ALEMBIC_MIGRATIONS=true once
-    # verified against a copy of prod.
-    use_alembic_migrations: bool = False
 
     # Stored as a plain string; use .get_cors_origins() to get the parsed list.
     # Accepts comma-separated ("a,b") or JSON array ('["a","b"]').

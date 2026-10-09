@@ -270,7 +270,6 @@ jobs:
           env_vars: |
             ENVIRONMENT=production
             CORS_ORIGINS=${{ vars.FRONTEND_URL || 'https://green.stuartjatkinson.co.uk' }}
-            USE_ALEMBIC_MIGRATIONS=true
           secrets: |
             DATABASE_URL=hoas-database-url:latest
             SECRET_KEY=hoas-secret-key:latest
