@@ -392,7 +392,7 @@ body {
 .save-name-preview::before { content: "Saves as: "; color: var(--text-dim); font-weight: 400; }
 .save-name-preview:empty { display: none; }
 
-/* ── Saved-design cards (shared by in-SPA My Designs + dashboard.html) ───────── */
+/* ── Saved-design cards (in-SPA My Designs) ───────── */
 .designs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .design-card {
   background: var(--bg-item); border: 1px solid var(--border-dim);
@@ -425,8 +425,7 @@ body {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Destructive action button — shared by index.html and dashboard.html, which
-   each carried an identical private copy until 2026-09-11. */
+/* Destructive action button. */
 .btn-danger {
   flex: 1; padding: 5px 3px; font-size: 11px;
   background: transparent; border: 1px solid var(--border-dim);

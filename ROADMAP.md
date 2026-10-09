@@ -465,7 +465,7 @@ States: `select → svg → map3d → print3d` (+ dashboard/login overlays). **B
 not navigation** (no re-pull).
 
 **Page inventory**
-- Live primary: `index.html` (SPA). Auxiliary: `dashboard.html`, `login.html`, `landing.html`.
+- Live primary: `index.html` (SPA). Auxiliary: `login.html`, `landing.html` (`dashboard.html` retired 2026-10-09 — My Designs is the in-SPA drawer).
 - `3d-print.html` — live but a near-duplicate of the inline 3D viewer (own panel/loading/
   controls/save/nav IDs). Fold into the SPA as the `print3d` state.
 - `3d-viewer.html` — **orphaned, no refs → delete** (Stage 1).

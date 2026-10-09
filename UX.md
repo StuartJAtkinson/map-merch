@@ -1,13 +1,13 @@
 # UX conventions — Heart on a Sleeve
 
 What the frontend actually does today (verified 2026-09-06 against
-`frontend/cesium/public/app.css`, `index.html`, `public/{dashboard,login,landing}.html`
+`frontend/cesium/public/app.css`, `index.html`, `public/{login,landing}.html`
 and `src/*.ts`; re-checked 2026-10-09). Reference document — questions go to CONSIDERATIONS.md,
 bugs to ISSUES.md.
 
 ## Where the design system lives
 
-`frontend/cesium/public/app.css` is the single shared stylesheet; all four HTML entry
+`frontend/cesium/public/app.css` is the single shared stylesheet; all three HTML entry
 points link it (`/app.css`). Anything reused across views belongs there. Per-page
 `<style>` blocks are for genuinely local layout only — `index.html`'s is scoped to the
 map selector and the three inline viewers.
@@ -100,4 +100,4 @@ one (not "Load"); **My Designs** is the collection; **Logout** (one word).
 Sidebars become drag-up bottom sheets: `position:fixed`, full width, `max-height:75vh`,
 `border-radius:14px 14px 0 0`, a `.sheet-handle` grip, translated down to a peek and
 opened by `.sheet-open`. `.hint` blocks are hidden; touch targets grow (`.cycle-btn`
-18px → 32px). `dashboard.html` instead turns its sidebar into a horizontal top bar.
+18px → 32px).

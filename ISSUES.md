@@ -6,6 +6,11 @@
 
 
 ## Open
+
+## Resolved (2026-10-09 session)
+- [x] **PR #49 three bump breaks the helvetiker font import** — read "Remove" as remove the PR: closed #49 + deleted its branch, and pinned `three` <0.185 via a dependabot `ignore` rule (`.github/dependabot.yml`); the 3D branding stamp keeps its font. *(resolved 2026-10-09)*
+- [x] **`dashboard.html` unreachable** — deleted `frontend/cesium/public/dashboard.html` and the now-callerless `?design=` deep-link in `src/app.ts`; scrubbed references from README, UX.md, docs/TEST_PLAN.md, app.css comments and ROADMAP's live-pages line. *(resolved 2026-10-09)*
+
 ## Resolved (2026-08-17 session)
 
 - [x] **TypeScript 7 breaks side-effect CSS import resolution — blocks dependabot PR #39** — added `"noUncheckedSideEffectImports": false` to `frontend/cesium/tsconfig.json`. TS 6+ tightened side-effect import resolution; the existing `declare module '*.css'` in `src/globals.d.ts` was no longer sufficient under TS 7. The new tsconfig option (no-op on TS ≤ 5.6) reverts the strictness. Reopen if dependabot PR #39 still fails `Type-check frontend (tsc)` after rebase. *(resolved 2026-08-17)*

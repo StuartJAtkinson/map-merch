@@ -48,7 +48,6 @@ heart-on-a-sleeve/
 │       ├── public/
 │       │   ├── app.css             Shared design system
 │       │   ├── login.html          Auth page
-│       │   ├── dashboard.html      Saved projects
 │       │   ├── 3d-viewer.html      Three.js OSM renderer + Print Preview
 │       │   └── svg-viewer.html     Pan/zoom SVG viewer + colour editor
 │       └── index.html              Map selector + merch picker

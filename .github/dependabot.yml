@@ -16,6 +16,11 @@ updates:
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
+    # three >=0.185 drops examples/fonts/helvetiker_bold.typeface.json, which
+    # viewer3d.ts imports for the 3D branding stamp. Pinned until that's replaced.
+    ignore:
+      - dependency-name: three
+        versions: [">=0.185.0"]
 
   # pip — backend
   - package-ecosystem: pip

@@ -7,7 +7,6 @@
 | # | Test | Expected |
 |---|---|---|
 | A1 | Visit `/` unauthenticated | Redirect to `/login.html?returnTo=/` |
-| A2 | Visit `/dashboard.html` unauthenticated | Redirect to `/login.html?returnTo=/dashboard.html` |
 | A3 | Valid login credentials | Stores 3 localStorage keys, redirects to `returnTo` |
 | A4 | Wrong password | Error message, button re-enables |
 | A5 | Login with empty fields | "Email and password are required" — no request fires |
@@ -101,21 +100,6 @@
 | T20 | Fabric preview (T-shirt etc.) | SVG texture + buildings only; auto-triggers after entry animation |
 | T21 | ← SVG View button | Navigates to `/` (not `history.back()`) |
 | T22 | Stats display | Shows "N buildings · M roads" after load |
-
----
-
-### Dashboard — `dashboard.html`
-
-| # | Test | Expected |
-|---|---|---|
-| D1 | Load with designs | Grid renders with thumbnails |
-| D2 | Load empty | Empty state with "Create your first one →" link |
-| D3 | Open design | Opens `svg-viewer.html` with full URL params |
-| D4 | Delete: cancel confirm | Nothing deleted |
-| D5 | Delete: confirm | Card removed; last card → empty state |
-| D6 | Delete: server error | Button re-enables, alert shown |
-| D7 | "← New design" | Navigates to `/` |
-| D8 | Logout | Clears localStorage, navigates to `/` |
 
 ---
 

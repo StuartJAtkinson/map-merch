@@ -1997,19 +1997,3 @@ document.querySelectorAll<HTMLElement>('.merch-btn').forEach(el => el.addEventLi
 // (The old hoas_return_to_3d restore shim is gone: the 3D-print view is now an in-SPA
 // overlay state, so "back" is a state pop with no navigation and no re-pull.)
 
-// Deep-link: /index.html?design=<id> (used by the dashboard "Open" button) loads that
-// saved design straight into the SPA — fetch the config, then loadDesign regenerates it.
-(function () {
-  const id = new URLSearchParams(location.search).get('design');
-  if (!id) return;
-  const token = localStorage.getItem('hoas_token');
-  if (!token) return;
-  fetch('/api/projects', { headers: { Authorization: `Bearer ${token}` } })
-    .then(r => r.ok ? r.json() : [])
-    .then((projects: any[]) => {
-      const p = projects.find(x => String(x.id) === id);
-      if (p) loadDesign(p);
-    })
-    .catch(() => { /* ignore — user can still draw a fresh selection */ });
-})();
-
