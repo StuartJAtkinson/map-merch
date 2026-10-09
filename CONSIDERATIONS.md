@@ -1,0 +1,1 @@
+- `frontend/cesium/public/dashboard.html` is unreachable — nothing links to it since My Designs became the in-app drawer, yet ROADMAP still lists it as a live auxiliary page. Retire it (and the `?design=` comment in `src/app.ts`), or link it back in as the full-page view?

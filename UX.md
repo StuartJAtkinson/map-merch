@@ -2,7 +2,8 @@
 
 What the frontend actually does today (verified 2026-09-06 against
 `frontend/cesium/public/app.css`, `index.html`, `public/{dashboard,login,landing}.html`
-and `src/*.ts`). Reference document — questions go to STYLE.md, bugs to ISSUES.md.
+and `src/*.ts`; re-checked 2026-10-09). Reference document — questions go to CONSIDERATIONS.md,
+bugs to ISSUES.md.
 
 ## Where the design system lives
 
@@ -56,7 +57,8 @@ every panel, 7px between stacked `.btn`s (their `margin-top`), 6px between grid 
 - **Toggles** are the `.toggle` switch, not checkboxes; the one checkbox
   (`.brand-row`) is a label-wrapped opt-in, and takes `accent-color: var(--accent)`.
 - **Inputs** use `--bg-item` on a 1.5px `--border-dim` border that turns `--accent` on
-  focus. (Padding varies — see STYLE.md.)
+  focus, sized `padding: 8px 10px` · 13px everywhere (`#place-search`, `.save-input`,
+  `.brand-select`, login's `.field input`).
 - **Icons are emoji/glyph prefixes in the label**, never separate elements:
   💾 Save · ↓ download · ← back · → forward · ⟳ regenerate · ⬡ wireframe · ▶ auto-rotate ·
   ⊞ My Designs · ↩ Logout · 🔍 search · ◉ 3D · 🖨 print.
