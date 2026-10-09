@@ -108,7 +108,7 @@ Use this for day-to-day development. The backend and database run in Docker; the
 docker compose up -d
 ```
 
-This starts `database` (PostgreSQL/PostGIS on `:5432`) and `backend` (FastAPI on `:8000`, source-mounted with `--reload`). Database tables are created automatically on first startup.
+This starts `database` (PostgreSQL/PostGIS on `:5432`) and `backend` (FastAPI on `:8000`, source-mounted with `--reload`). Startup runs `alembic upgrade head`, so tables are created (and any new migrations applied) automatically — see `docs/DEPLOY.md` § Schema for adding one.
 
 **2. Start the frontend dev server:**
 
