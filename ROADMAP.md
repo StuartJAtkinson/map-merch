@@ -13,7 +13,7 @@ are listed here in execution order; the phase sections keep them as plain notes.
 
 ### Milestone 2 — Live (Phase 10 remainder)
 
-- [ ] Alembic migrations (currently using `create_all` — fine for new deploys, not for schema changes) *(Phase 10 — Deployment)*
+- [x] Alembic migrations (currently using `create_all` — fine for new deploys, not for schema changes) *(Phase 10 — Deployment)*
 - [ ] Rate limiting on Overpass calls *(Phase 10 — Deployment)*
 
 ### Milestone 3 — Commerce (Phases 7–8)
