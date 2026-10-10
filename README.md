@@ -33,10 +33,12 @@ heart-on-a-sleeve/
 │   │   │   ├── db_models.py        User + DesignProject ORM models
 │   │   │   └── schemas.py          Pydantic request/response models
 │   │   └── services/
-│   │       ├── osm_fetcher.py      Async Overpass API client
+│   │       ├── osm_fetcher.py      Async Overpass API client (rate-limited: 2 concurrent, 1s apart)
 │   │       ├── svg_generator.py    OSM → SVG (pyproj EPSG:27700 for GB, 3 styles)
 │   │       ├── stl_generator.py    OSM → 3 interlocking STL pieces
-│   │       └── license_tracker.py  ODbL attribution
+│   │       ├── license_tracker.py  ODbL attribution
+│   │       ├── email.py            SendGrid transactional email
+│   │       └── woocommerce.py      WooCommerce REST v3 client (not yet wired to routes)
 │   ├── Dockerfile
 │   └── requirements.txt
 │
