@@ -315,6 +315,5 @@
 - [x] **PR #47 "build(deps): bump actions/cache from 5 to 6"** — merged 2026-09-04, see above.
 
 ## Needs input (Auto Continue)
-*Left by Auto Continue 2026-10-09 — decide these, then clear CONSIDERATIONS.md.*
-- `frontend/cesium/public/dashboard.html` is unreachable — nothing links to it since My Designs became the in-app drawer, yet ROADMAP still lists it as a live auxiliary page. Retire it (and the `?design=` comment in `src/app.ts`), or link it back in as the full-page view?
-- PR #49 "build(deps): bump the npm-minor-patch group across 1 directory with 2 updates" fails "Type-check frontend (tsc)" and "Build frontend" on head 5ecafcd: the bumped `three` no longer ships `three/examples/fonts/helvetiker_bold.typeface.json` (imported at `frontend/cesium/src/viewer3d.ts:6`). Vendor the font into the repo, or pin `three` and close the PR?
+*Left by Auto Continue 2026-10-10 — decide these, then clear CONSIDERATIONS.md.*
+- Pricing is built (`MERCH_BASE_COSTS` JSON + `PRICE_MARKUP_PCT` in the backend env) but no figures are set, so every WooCommerce draft is unpriced. What base cost per merch type (T-Shirt, Mug, Tote Bag, Coaster, Placemat, Relief) and what markup %?
