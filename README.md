@@ -38,7 +38,7 @@ heart-on-a-sleeve/
 │   │       ├── stl_generator.py    OSM → 3 interlocking STL pieces
 │   │       ├── license_tracker.py  ODbL attribution
 │   │       ├── email.py            SendGrid transactional email
-│   │       └── woocommerce.py      WooCommerce REST v3 client (not yet wired to routes)
+│   │       └── woocommerce.py      WooCommerce REST v3 client + design → draft product payload
 │   ├── Dockerfile
 │   └── requirements.txt
 │
@@ -72,7 +72,7 @@ Browser → nginx (port 80/8080)
 
 FastAPI backend
     ├── /api/auth/*         → JWT auth (PostgreSQL users table)
-    ├── /api/projects/*     → design project CRUD (PostgreSQL)
+    ├── /api/projects/*     → design project CRUD (PostgreSQL) + POST {id}/product → WooCommerce draft
     ├── /api/generate/svg   → Overpass fetch → svgwrite render
     ├── /api/generate/stl   → Overpass fetch → trimesh/shapely STL
     └── /api/osm/features   → Overpass proxy (3D viewer live render)
