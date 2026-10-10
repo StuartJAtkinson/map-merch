@@ -2,7 +2,7 @@
 
 What the frontend actually does today (verified 2026-09-06 against
 `frontend/cesium/public/app.css`, `index.html`, `public/{login,landing}.html`
-and `src/*.ts`; re-checked 2026-10-09). Reference document — questions go to CONSIDERATIONS.md,
+and `src/*.ts`; re-checked 2026-10-10). Reference document — questions go to CONSIDERATIONS.md,
 bugs to ISSUES.md.
 
 ## Where the design system lives
@@ -54,6 +54,9 @@ every panel, 7px between stacked `.btn`s (their `margin-top`), 6px between grid 
 - **`.btn`** — full-width, transparent, 1px `--border-item`, 12px. Hover and the
   selected `.on` / `.active` state both go accent; `.on` also gets `--accent-soft`.
   One `.btn-primary` per view maximum (solid accent) — it's the Generate action.
+- **`.btn-secondary`** — the compact inline variant (flex:1, `--text-mid`, 9px 6px),
+  used side-by-side in rows such as the user nav; same accent hover as `.btn`. Defined
+  in `index.html`'s local `<style>`, not `app.css`.
 - **Toggles** are the `.toggle` switch, not checkboxes; the one checkbox
   (`.brand-row`) is a label-wrapped opt-in, and takes `accent-color: var(--accent)`.
 - **Inputs** use `--bg-item` on a 1.5px `--border-dim` border that turns `--accent` on
@@ -93,7 +96,10 @@ arrow (`◉ View 3D →`).
 
 Merch labels come from one map: T-Shirt · Mug · Tote Bag · Coaster · Placemat · Relief
 (`3d_print` is the id, "Relief" is the label). Saved work is a **design**; you **Open**
-one (not "Load"); **My Designs** is the collection; **Logout** (one word).
+one (not "Load"); **My Designs** is the collection; **Logout** (one word) pairs with **Sign in** (two
+words, never "Log in"). The viewer's forward action to the print view is
+"🖨 3D Print →" for every 3D type (Coaster, Placemat, Relief) — it names the view, not
+the merch.
 
 ## Mobile (≤900px)
 
