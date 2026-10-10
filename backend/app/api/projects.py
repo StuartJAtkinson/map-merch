@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.models.db_models import DesignProject, User
 from app.api.auth import get_current_user
+from app.services.woocommerce import WooCommerceClient, WooCommerceError, build_product_payload
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -82,3 +83,29 @@ async def delete_project(
         raise HTTPException(status_code=404, detail="Project not found")
     await db.delete(project)
     await db.commit()
+
+
+@router.post("/{project_id}/product", status_code=201)
+async def create_product(
+    project_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a draft WooCommerce product from a saved design."""
+    result = await db.execute(
+        select(DesignProject).where(DesignProject.id == project_id, DesignProject.user_id == user.id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    try:
+        client = WooCommerceClient.from_settings()
+    except WooCommerceError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    try:
+        async with client:
+            product = await client.post("products", build_product_payload(project))
+    except WooCommerceError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    return {"product_id": product["id"], "sku": product.get("sku"),
+            "status": product.get("status"), "permalink": product.get("permalink")}

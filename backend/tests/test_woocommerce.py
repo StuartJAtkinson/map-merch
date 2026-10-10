@@ -4,11 +4,14 @@ Run with:
     cd backend && .venv/Scripts/python.exe -m pytest tests/test_woocommerce.py -v
 """
 import base64
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
-from app.services.woocommerce import WooCommerceClient, WooCommerceError
+from app.services.woocommerce import (
+    WooCommerceClient, WooCommerceError, build_product_payload,
+)
 
 
 def _client(handler):
@@ -47,3 +50,15 @@ async def test_error_surfaces_wc_message_and_status():
 def test_unconfigured_raises():
     with pytest.raises(WooCommerceError):
         WooCommerceClient("", "", "")
+
+
+def test_product_payload_is_unpriced_draft_with_project_sku():
+    project = SimpleNamespace(id=42, name="Bath", merch_type="3d_print",
+                              bbox_west=-2.37, bbox_south=51.37, bbox_east=-2.34, bbox_north=51.39)
+    p = build_product_payload(project)
+    assert p["name"] == "Bath — Relief"
+    assert p["status"] == "draft" and "regular_price" not in p
+    assert p["sku"] == "hoas-42"
+    meta = {m["key"]: m["value"] for m in p["meta_data"]}
+    assert meta["hoas_project_id"] == "42"
+    assert meta["hoas_bbox"] == "-2.370000,51.370000,-2.340000,51.390000"

@@ -1,12 +1,45 @@
 """
 WooCommerce REST API (v3) client.
 
-Thin async wrapper: auth, base URL, JSON in/out, errors. Product/order logic
-builds on top of request() rather than living here.
+Thin async wrapper (auth, base URL, JSON in/out, errors) plus the
+design-project → product payload mapping.
 """
 
 import httpx
 from app.core.config import get_settings
+
+
+# Same labels as the frontend's merch map (UX.md › Terminology)
+MERCH_LABELS = {
+    "tshirt": "T-Shirt", "mug": "Mug", "tote": "Tote Bag",
+    "coaster": "Coaster", "placemat": "Placemat", "3d_print": "Relief",
+}
+
+
+def product_sku(project_id: int) -> str:
+    return f"hoas-{project_id}"
+
+
+def build_product_payload(project) -> dict:
+    """WooCommerce product body for a DesignProject.
+
+    Created as a draft with no price — pricing is a separate step, so nothing
+    goes on sale until it's set. SKU is unique per project, so WooCommerce
+    itself rejects a second create for the same design.
+    """
+    label = MERCH_LABELS.get(project.merch_type, project.merch_type)
+    bbox = [project.bbox_west, project.bbox_south, project.bbox_east, project.bbox_north]
+    return {
+        "name": f"{project.name} — {label}",
+        "type": "simple",
+        "status": "draft",
+        "sku": product_sku(project.id),
+        "meta_data": [
+            {"key": "hoas_project_id", "value": str(project.id)},
+            {"key": "hoas_merch_type", "value": project.merch_type},
+            {"key": "hoas_bbox", "value": ",".join(f"{v:.6f}" for v in bbox)},
+        ],
+    }
 
 
 class WooCommerceError(Exception):
