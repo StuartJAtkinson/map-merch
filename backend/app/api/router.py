@@ -333,7 +333,8 @@ async def estimateGeneration(req: SVGGenerationRequest):
     """
     element_count = 0
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=8.0)) as client:
+        # Shared limiter — the count query is an Overpass call too
+        async with osm_fetcher._rate_limiter, httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=8.0)) as client:
             r = await client.post(
                 os.environ.get("OVERPASS_ENDPOINT", "https://overpass.kumi.systems/api/interpreter"),
                 data={"data": count_query},
