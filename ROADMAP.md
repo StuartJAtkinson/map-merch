@@ -18,7 +18,7 @@ are listed here in execution order; the phase sections keep them as plain notes.
 
 ### Milestone 3 — Commerce (Phases 7–8)
 
-- [ ] WooCommerce REST API client *(Phase 7 — WooCommerce Integration)*
+- [x] WooCommerce REST API client *(Phase 7 — WooCommerce Integration)*
 - [ ] Create product from design project *(Phase 7 — WooCommerce Integration)*
 - [ ] Price calculation: base cost + configurable markup *(Phase 7 — WooCommerce Integration)*
 - [ ] Order submission to POD provider *(Phase 7 — WooCommerce Integration)*
