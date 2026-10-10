@@ -7,6 +7,9 @@
 
 ## Open
 
+## Resolved (2026-10-10 session)
+- [x] **Pricing figures: base cost per merch type + markup** — researched Prodigi UK "from" prices and set them as `merch_base_costs` defaults in `backend/app/core/config.py` (T-Shirt £6.86, Mug £3.60, Tote £10.00, Coaster £4.00, Placemat £9.00; Relief £30.00 from UK 3D-print bureau one-off rates); `price_markup_pct` = 100 (2× cost, 50% margin); env-overridable. *(resolved 2026-10-10)*
+
 ## Resolved (2026-10-09 session)
 - [x] **PR #49 three bump breaks the helvetiker font import** — read "Remove" as remove the PR: closed #49 + deleted its branch, and pinned `three` <0.185 via a dependabot `ignore` rule (`.github/dependabot.yml`); the 3D branding stamp keeps its font. *(resolved 2026-10-09)*
 - [x] **`dashboard.html` unreachable** — deleted `frontend/cesium/public/dashboard.html` and the now-callerless `?design=` deep-link in `src/app.ts`; scrubbed references from README, UX.md, docs/TEST_PLAN.md, app.css comments and ROADMAP's live-pages line. *(resolved 2026-10-09)*

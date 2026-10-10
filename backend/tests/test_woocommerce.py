@@ -78,3 +78,14 @@ def test_payload_carries_price_when_given():
                               bbox_west=0, bbox_south=0, bbox_east=1, bbox_north=1)
     p = build_product_payload(project, "9.30")
     assert p["regular_price"] == "9.30" and p["status"] == "draft"
+
+
+def test_default_pricing_doubles_cost_for_every_merch_type():
+    import json
+    from app.core.config import Settings
+    from app.services.woocommerce import MERCH_LABELS
+    s = Settings()
+    costs = json.loads(s.merch_base_costs)
+    assert set(costs) == set(MERCH_LABELS)              # every type is priced
+    assert s.price_markup_pct == 100                     # 50% margin
+    assert calculate_price("mug", costs, s.price_markup_pct) == "7.20"

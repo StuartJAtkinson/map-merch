@@ -11,10 +11,17 @@ class Settings(BaseSettings):
     woocommerce_store_url: str = ""
     woocommerce_consumer_key: str = ""
     woocommerce_consumer_secret: str = ""
-    # Pricing — JSON map of merch type → base cost in store currency, e.g.
-    # '{"tshirt": 9.50, "mug": 6.20}'. Types with no entry stay unpriced.
-    merch_base_costs: str = "{}"
-    price_markup_pct: float = 0.0
+    # Pricing — JSON map of merch type → base cost (GBP, ex-VAT, ex-shipping);
+    # types with no entry stay unpriced. Defaults researched 2026-10-10 from
+    # Prodigi UK "from" prices (Gildan 64000 tee, 11oz mug, Stanley/Stella
+    # STAU773 tote, 4" cork coaster, 11x8" cork placemat); Relief has no POD
+    # equivalent, so it's a UK 3D-print bureau one-off (~£30 for a ~100mm PLA part).
+    merch_base_costs: str = (
+        '{"tshirt": 6.86, "mug": 3.60, "tote": 10.00,'
+        ' "coaster": 4.00, "placemat": 9.00, "3d_print": 30.00}'
+    )
+    # 100% markup on cost → price = 2× cost → 50% margin
+    price_markup_pct: float = 100.0
 
     # POD Provider
     pod_provider: str = "prodigi"  # prodigi or printful
