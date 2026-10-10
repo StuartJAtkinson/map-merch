@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     woocommerce_store_url: str = ""
     woocommerce_consumer_key: str = ""
     woocommerce_consumer_secret: str = ""
+    # Pricing — JSON map of merch type → base cost in store currency, e.g.
+    # '{"tshirt": 9.50, "mug": 6.20}'. Types with no entry stay unpriced.
+    merch_base_costs: str = "{}"
+    price_markup_pct: float = 0.0
 
     # POD Provider
     pod_provider: str = "prodigi"  # prodigi or printful

@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 from app.services.woocommerce import (
-    WooCommerceClient, WooCommerceError, build_product_payload,
+    WooCommerceClient, WooCommerceError, build_product_payload, calculate_price,
 )
 
 
@@ -62,3 +62,19 @@ def test_product_payload_is_unpriced_draft_with_project_sku():
     meta = {m["key"]: m["value"] for m in p["meta_data"]}
     assert meta["hoas_project_id"] == "42"
     assert meta["hoas_bbox"] == "-2.370000,51.370000,-2.340000,51.390000"
+
+
+def test_calculate_price_base_plus_markup_rounded_half_up():
+    costs = {"mug": 6.20, "tshirt": 10}
+    assert calculate_price("mug", costs, 50) == "9.30"
+    assert calculate_price("tshirt", costs, 0) == "10.00"
+    assert calculate_price("tshirt", costs, 12.345) == "11.23"   # 11.2345 → 11.23
+    assert calculate_price("mug", {"mug": 1.01}, 50) == "1.52"   # 1.515 → 1.52 (half-up)
+    assert calculate_price("tote", costs, 50) is None            # unconfigured → unpriced
+
+
+def test_payload_carries_price_when_given():
+    project = SimpleNamespace(id=1, name="Bath", merch_type="mug",
+                              bbox_west=0, bbox_south=0, bbox_east=1, bbox_north=1)
+    p = build_product_payload(project, "9.30")
+    assert p["regular_price"] == "9.30" and p["status"] == "draft"

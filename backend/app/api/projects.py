@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.models.db_models import DesignProject, User
 from app.api.auth import get_current_user
-from app.services.woocommerce import WooCommerceClient, WooCommerceError, build_product_payload
+from app.services.woocommerce import WooCommerceClient, WooCommerceError, build_product_payload, price_for
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -104,8 +104,9 @@ async def create_product(
         raise HTTPException(status_code=503, detail=str(e)) from e
     try:
         async with client:
-            product = await client.post("products", build_product_payload(project))
+            product = await client.post("products", build_product_payload(project, price_for(project.merch_type)))
     except WooCommerceError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
     return {"product_id": product["id"], "sku": product.get("sku"),
-            "status": product.get("status"), "permalink": product.get("permalink")}
+            "status": product.get("status"),
+            "regular_price": product.get("regular_price"), "permalink": product.get("permalink")}

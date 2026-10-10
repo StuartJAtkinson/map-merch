@@ -5,6 +5,9 @@ Thin async wrapper (auth, base URL, JSON in/out, errors) plus the
 design-project → product payload mapping.
 """
 
+import json
+from decimal import ROUND_HALF_UP, Decimal
+
 import httpx
 from app.core.config import get_settings
 
@@ -20,16 +23,26 @@ def product_sku(project_id: int) -> str:
     return f"hoas-{project_id}"
 
 
-def build_product_payload(project) -> dict:
+def calculate_price(merch_type: str, base_costs: dict, markup_pct: float) -> str | None:
+    """Base cost + percentage markup, rounded half-up to 2dp as WooCommerce's
+    price string. None when the type has no base cost configured."""
+    if merch_type not in base_costs:
+        return None
+    base = Decimal(str(base_costs[merch_type]))
+    price = base * (1 + Decimal(str(markup_pct)) / 100)
+    return str(price.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def build_product_payload(project, price: str | None = None) -> dict:
     """WooCommerce product body for a DesignProject.
 
-    Created as a draft with no price — pricing is a separate step, so nothing
-    goes on sale until it's set. SKU is unique per project, so WooCommerce
-    itself rejects a second create for the same design.
+    Always created as a draft, so nothing goes on sale without review; priced
+    only when a base cost is configured for the merch type. SKU is unique per
+    project, so WooCommerce itself rejects a second create for the same design.
     """
     label = MERCH_LABELS.get(project.merch_type, project.merch_type)
     bbox = [project.bbox_west, project.bbox_south, project.bbox_east, project.bbox_north]
-    return {
+    payload = {
         "name": f"{project.name} — {label}",
         "type": "simple",
         "status": "draft",
@@ -40,6 +53,14 @@ def build_product_payload(project) -> dict:
             {"key": "hoas_bbox", "value": ",".join(f"{v:.6f}" for v in bbox)},
         ],
     }
+    if price is not None:
+        payload["regular_price"] = price
+    return payload
+
+
+def price_for(merch_type: str) -> str | None:
+    s = get_settings()
+    return calculate_price(merch_type, json.loads(s.merch_base_costs or "{}"), s.price_markup_pct)
 
 
 class WooCommerceError(Exception):
