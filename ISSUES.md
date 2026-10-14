@@ -6,6 +6,7 @@
 
 
 ## Open
+- [ ] **Consideration needs a visual** — re-raise it in CONSIDERATIONS.md naming a visual that exists on disk: a screenshot of the real thing, a generated `.atelier/views/<name>.html` or `.svg` showing every option side by side, or the real hex / CSS values. Question: PR #33 "build(deps): update aiosqlite requirement from >=0.20.0 to >=0.22.1 in /backend" — `gh pr merge 33` rejected: "not mergeable: the merge commit cannot be cleanly created" (checks all pass on head 5094997). Conflict is adjacent lines in `backend/requirements.txt`: PR sets `aiosqlite>=0.22.1` next to old `sqlalchemy[asyncio]>=2.0.0`; main already has `sqlalchemy[asyncio]>=2.1.3`. Comment `@dependabot rebase` on the PR, or resolve keeping both bumps?
 
 ## Resolved (2026-10-10 session)
 - [x] **Pricing figures: base cost per merch type + markup** — researched Prodigi UK "from" prices and set them as `merch_base_costs` defaults in `backend/app/core/config.py` (T-Shirt £6.86, Mug £3.60, Tote £10.00, Coaster £4.00, Placemat £9.00; Relief £30.00 from UK 3D-print bureau one-off rates); `price_markup_pct` = 100 (2× cost, 50% margin); env-overridable. *(resolved 2026-10-10)*

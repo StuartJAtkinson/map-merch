@@ -1,2 +1,1 @@
 
-- PR #33 "build(deps): update aiosqlite requirement from >=0.20.0 to >=0.22.1 in /backend" — `gh pr merge 33` rejected: "not mergeable: the merge commit cannot be cleanly created" (checks all pass on head 5094997). Conflict is adjacent lines in `backend/requirements.txt`: PR sets `aiosqlite>=0.22.1` next to old `sqlalchemy[asyncio]>=2.0.0`; main already has `sqlalchemy[asyncio]>=2.1.3`. Comment `@dependabot rebase` on the PR, or resolve keeping both bumps?
