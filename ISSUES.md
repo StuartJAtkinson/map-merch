@@ -319,5 +319,5 @@
 - [x] **PR #47 "build(deps): bump actions/cache from 5 to 6"** — merged 2026-09-04, see above.
 
 ## Needs input (Auto Continue)
-*Left by Auto Continue 2026-10-10 — decide these, then clear CONSIDERATIONS.md.*
-- Pricing is built (`MERCH_BASE_COSTS` JSON + `PRICE_MARKUP_PCT` in the backend env) but no figures are set, so every WooCommerce draft is unpriced. What base cost per merch type (T-Shirt, Mug, Tote Bag, Coaster, Placemat, Relief) and what markup %?
+*Left by Auto Continue 2026-10-14 — decide these, then clear CONSIDERATIONS.md.*
+- PR #55 "build(deps): update mapbox-earcut requirement from >=2.0.0 to >=2.1.0 in /backend" has no checks: the `CI` workflow (`.github/workflows/ci.yml`) is disabled on GitHub (dispatch → HTTP 422) and the last two main CI runs failed — see `.atelier/views/pr55-ci-disabled.html`. (a) re-enable CI and fix main first, or (b) merge Dependabot PRs unchecked?
