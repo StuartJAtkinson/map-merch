@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><title>PR #55 — CI disabled</title>
+<style>body{font:14px system-ui;margin:2rem}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:.4rem .7rem;text-align:left}.bad{color:#b91c1c}.ok{color:#15803d}</style>
+<h2>PR #55 mapbox-earcut &gt;=2.1.0 — no checks because CI workflow is disabled</h2>
+<table><tr><th>Item</th><th>State</th></tr>
+<tr><td>Workflow <code>CI</code> (.github/workflows/ci.yml, id 282404073)</td><td class="bad">disabled — dispatch returns HTTP 422</td></tr>
+<tr><td>PR #55 head d0a1ff1 checks</td><td class="bad">none reported</td></tr>
+<tr><td>main CI run 38053527564 (96d67a3, 2026-10-10)</td><td class="bad">failure</td></tr>
+<tr><td>main CI run 38050171122 (f97cc6d, 2026-10-10)</td><td class="bad">failure</td></tr>
+<tr><td>PR #33 last CI (older run 34003027018)</td><td class="ok">pass</td></tr></table>
+<h3>Options</h3>
+<table><tr><th>a</th><td>Re-enable CI (<code>gh workflow enable ci.yml</code>), fix main's failure, then re-run Dependabot PRs</td></tr>
+<tr><th>b</th><td>Keep CI disabled; merge Dependabot PRs without checks</td></tr></table>
